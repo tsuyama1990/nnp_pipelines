@@ -11,7 +11,7 @@ from ase.io import read, write
 from shared.core.interfaces import MDEngine, Sampler, StructureGenerator, Labeler, Trainer, KMCResult, KMCEngine, Validator
 from shared.core.enums import SimulationState
 from .wrappers.lammps_wrapper import LammpsWorker
-from .wrappers.dft_worker import DftWorker
+from .wrappers.dft_wrapper import DftWorker
 from .wrappers.pace_wrapper import PaceWorker
 from .wrappers.gen_wrapper import GenWorker
 
