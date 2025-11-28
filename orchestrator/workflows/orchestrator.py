@@ -16,9 +16,8 @@ from shared.core.enums import KMCStatus
 from shared.utils.logger import CSVLogger
 
 from orchestrator.src.state_manager import StateManager
-from orchestrator.src.services.md_service import MDService
 from orchestrator.src.services.al_service import ActiveLearningService
-from orchestrator.src.services.kmc_service import KMCService
+from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +27,14 @@ class ActiveLearningOrchestrator:
     def __init__(
         self,
         config: Config,
-        md_service: MDService,
         al_service: ActiveLearningService,
-        kmc_service: KMCService,
+        explorer: BaseExplorer,
         state_manager: StateManager,
         csv_logger: Optional[CSVLogger] = None
     ):
         self.config = config
-        self.md_service = md_service
         self.al_service = al_service
-        self.kmc_service = kmc_service
+        self.explorer = explorer
         self.state_manager = state_manager
         self.csv_logger = csv_logger or CSVLogger()
 
@@ -118,23 +115,31 @@ class ActiveLearningOrchestrator:
                 if iteration > 0 and iteration % 5 == 0:
                     self.al_service.inject_deformation_data(input_structure_arg)
 
-                # --- MD Phase ---
-                md_success, uncertain_structures, md_failed = self.md_service.run_walkers(
-                    iteration, abs_potential_path, input_structure_arg, is_restart
+                # --- Exploration Phase ---
+                exploration_result = self.explorer.explore(
+                    current_structure=input_structure_arg,
+                    potential_path=str(abs_potential_path),
+                    iteration=iteration,
+                    is_restart=is_restart
                 )
 
-                if md_failed:
-                    logger.error("MD Failed in one or more walkers.")
+                if exploration_result.status == ExplorationStatus.FAILED:
+                    logger.error("Exploration failed.")
                     break
 
-                if uncertain_structures:
+                if exploration_result.status == ExplorationStatus.UNCERTAIN:
                     if al_consecutive_counter >= 3:
                         raise RuntimeError("Max AL retries reached. Infinite loop detected.")
 
-                    logger.info("MD detected uncertainty. Triggering AL.")
+                    logger.info("Exploration detected uncertainty. Triggering AL.")
 
                     new_pot = self.al_service.trigger_al(
-                        uncertain_structures, abs_potential_path, potential_yaml_path, abs_asi_path, work_dir, iteration
+                        exploration_result.uncertain_structures,
+                        abs_potential_path,
+                        potential_yaml_path,
+                        abs_asi_path,
+                        work_dir,
+                        iteration
                     )
 
                     if new_pot:
@@ -148,68 +153,15 @@ class ActiveLearningOrchestrator:
                     else:
                         break
 
-                # If MD was successful and stable
-                logger.info("MD walkers completed stably.")
+                # Success or No Event
+                logger.info(f"Exploration phase completed with status: {exploration_result.status}")
                 al_consecutive_counter = 0
 
-                # --- KMC Phase ---
-                if self.config.kmc_params.active:
-                    chk_files = list(work_dir.glob("restart.chk.*"))
-                    if not chk_files:
-                        logger.error("No restart files found for KMC.")
-                        break
+                if exploration_result.final_structure:
+                    current_structure = exploration_result.final_structure
 
-                    selected_chk = random.choice(chk_files)
-                    selected_seed = selected_chk.suffix.split('.')[-1]
-                    logger.info(f"Selected walker seed {selected_seed} for KMC.")
-
-                    shutil.copy(selected_chk, work_dir / "restart.chk") # For next iter restart
-
-                    selected_dump = work_dir / f"dump.lammpstrj.{selected_seed}"
-                    if not selected_dump.exists():
-                        logger.error("No structure available for KMC.")
-                        break
-
-                    kmc_input_atoms = read(selected_dump, index=-1, format="lammps-dump-text")
-                    self.al_service.ensure_chemical_symbols(kmc_input_atoms)
-
-                    kmc_result = self.kmc_service.run_step(kmc_input_atoms, str(abs_potential_path))
-
-                    if kmc_result.status == KMCStatus.SUCCESS:
-                        next_input_file = work_dir / "kmc_output.data"
-                        write(next_input_file, kmc_result.structure, format="lammps-data", velocities=True)
-                        current_structure = str(next_input_file.resolve())
-                        is_restart = False
-
-                    elif kmc_result.status == KMCStatus.UNCERTAIN:
-                        logger.info("KMC detected uncertainty. Triggering AL.")
-                        if al_consecutive_counter >= 3:
-                            raise RuntimeError("Max AL retries reached in KMC.")
-
-                        new_pot = self.al_service.trigger_al(
-                            [kmc_result.structure], abs_potential_path, potential_yaml_path, abs_asi_path, work_dir, iteration
-                        )
-                        if new_pot:
-                            current_potential = str(Path(new_pot).resolve())
-                            new_asi = work_dir / "potential.asi"
-                            if new_asi.exists():
-                                current_asi = str(new_asi.resolve())
-                            is_restart = True
-                            al_consecutive_counter += 1
-                            continue
-                        else:
-                            break
-
-                    elif kmc_result.status == KMCStatus.NO_EVENT:
-                         is_restart = True
-
-                else:
-                    # Pure MD
-                    chk_files = list(work_dir.glob("restart.chk.*"))
-                    if chk_files:
-                        selected_chk = random.choice(chk_files)
-                        shutil.copy(selected_chk, work_dir / "restart.chk")
-                    is_restart = True
+                # Update restart state based on explorer metadata
+                is_restart = exploration_result.metadata.get("is_restart", False)
 
             except Exception as e:
                 logger.exception(f"An error occurred in iteration {iteration}: {e}")

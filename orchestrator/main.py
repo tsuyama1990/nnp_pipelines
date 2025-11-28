@@ -68,18 +68,19 @@ class AppBuilder:
             sys.exit(1)
 
         # Instantiate Services
-        md_service = MDService(md_engine, self.config)
-        kmc_service = KMCService(kmc_engine, self.config)
         al_service = ActiveLearningService(sampler, generator, labeler, trainer, validator, self.config)
+
+        # Create Explorer via Factory
+        explorer = factory.create_explorer(al_service)
+
         state_manager = StateManager(Path("data"))
 
         csv_logger = CSVLogger()
 
         orchestrator = ActiveLearningOrchestrator(
             config=self.config,
-            md_service=md_service,
             al_service=al_service,
-            kmc_service=kmc_service,
+            explorer=explorer,
             state_manager=state_manager,
             csv_logger=csv_logger
         )
