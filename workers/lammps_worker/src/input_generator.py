@@ -58,9 +58,14 @@ class LAMMPSInputGenerator:
             lines.append(f"mass {i+1} {mass}")
 
         # Pair style
-        lines.append(f"pair_style hybrid/overlay pace/extrapolation lj/cut {rcut}")
-        lines.append(f"pair_coeff * * pace/extrapolation {potential_path} {element_map}")
-        lines.append(f"pair_coeff * * lj/cut {epsilon} {sigma}")
+        if potential_path and potential_path.lower() != "none":
+            lines.append(f"pair_style hybrid/overlay pace/extrapolation lj/cut {rcut}")
+            lines.append(f"pair_coeff * * pace/extrapolation {potential_path} {element_map}")
+            lines.append(f"pair_coeff * * lj/cut {epsilon} {sigma}")
+        else:
+            # Pure LJ mode (Seed Generation)
+            lines.append(f"pair_style lj/cut {rcut}")
+            lines.append(f"pair_coeff * * {epsilon} {sigma}")
 
         # Enforce consistency with Python side ShiftedLennardJones
         if shift_energy:
@@ -77,17 +82,26 @@ class LAMMPSInputGenerator:
         # NPT fix
         lines.append(f"fix 1 all npt temp {temp} {temp} 0.1 iso {press} {press} 1.0")
 
-        # Uncertainty monitoring
-        lines.append("# Gamma calculation fix")
-        lines.append("fix f_gamma all pair 10 pace/extrapolation gamma 1")
-        lines.append("compute c_max_gamma all reduce max f_f_gamma")
-        lines.append("variable v_max_gamma equal c_max_gamma")
-        lines.append(f"fix halt_sim all halt 10 v_max_gamma > {gamma_threshold} error continue")
+        if potential_path and potential_path.lower() != "none":
+            # Uncertainty monitoring
+            lines.append("# Gamma calculation fix")
+            lines.append("fix f_gamma all pair 10 pace/extrapolation gamma 1")
+            lines.append("compute c_max_gamma all reduce max f_f_gamma")
+            lines.append("variable v_max_gamma equal c_max_gamma")
+            lines.append(f"fix halt_sim all halt 10 v_max_gamma > {gamma_threshold} error continue")
+        else:
+            # No gamma calculation in LJ mode
+            lines.append("# No gamma monitoring in LJ mode")
 
         # Restart and Dump
         lines.append(f"restart {restart_freq} restart.chk")
-        # We dump f_f_gamma to track uncertainty
-        lines.append(f"dump 1 all custom {dump_freq} dump.lammpstrj id type x y z fx fy fz f_f_gamma")
+
+        if potential_path and potential_path.lower() != "none":
+            # We dump f_f_gamma to track uncertainty
+            lines.append(f"dump 1 all custom {dump_freq} dump.lammpstrj id type x y z fx fy fz f_f_gamma")
+        else:
+            # Regular dump without gamma
+            lines.append(f"dump 1 all custom {dump_freq} dump.lammpstrj id type x y z fx fy fz")
 
         lines.append(f"run {steps}")
 

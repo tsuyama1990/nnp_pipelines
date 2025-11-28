@@ -141,6 +141,23 @@ generation:
       #   Cu: 4
 
 # -----------------------------------------------------------------------------
+# Seed Generation Parameters
+# Configuration for the initial multi-temperature exploration (Phase 1).
+# -----------------------------------------------------------------------------
+seed_generation:
+  # Number of initial random structures to generate.
+  n_random_structures: 100
+
+  # List of temperatures (K) for MD exploration.
+  exploration_temperatures: [300.0, 1000.0]
+
+  # Number of MD steps for each exploration run.
+  n_md_steps: 1000
+
+  # Final number of diverse structures to sample for DFT.
+  n_samples_for_dft: 20
+
+# -----------------------------------------------------------------------------
 # ACE Model Configuration (Pacemaker Pass-through)
 # Defines the potential architecture and training hyperparameters.
 # -----------------------------------------------------------------------------

@@ -166,6 +166,14 @@ class PreOptimizationParams:
     device: str = "cuda"
 
 @dataclass
+class SeedGenerationParams:
+    """Parameters for the Seed Generation phase."""
+    n_random_structures: int = 100
+    exploration_temperatures: List[float] = field(default_factory=lambda: [300.0, 1000.0])
+    n_md_steps: int = 1000
+    n_samples_for_dft: int = 20
+
+@dataclass
 class GenerationParams:
     """Parameters for scenario-driven generation."""
     pre_optimization: PreOptimizationParams = field(default_factory=PreOptimizationParams)
@@ -223,6 +231,7 @@ class Config:
     seed: int = 42
     kmc_params: KMCParams = field(default_factory=KMCParams)
     generation_params: GenerationParams = field(default_factory=GenerationParams)
+    seed_generation: SeedGenerationParams = field(default_factory=SeedGenerationParams)
     exploration_schedule: List[ExplorationStage] = field(default_factory=list)
 
     @classmethod
@@ -282,6 +291,8 @@ class Config:
 
         md_dict = config_dict.get("md_params", {})
 
+        seed_gen_dict = config_dict.get("seed_generation", {})
+
         lj_dict = config_dict.get("lj_params", {})
         if not lj_dict:
             elements = md_dict.get("elements", [])
@@ -316,6 +327,7 @@ class Config:
             training_params=TrainingParams(**config_dict.get("training_params", {})),
             ace_model=ACEModelParams(**ace_dict),
             generation_params=generation_params,
+            seed_generation=SeedGenerationParams(**seed_gen_dict),
             exploration_schedule=schedule_list,
             seed=config_dict.get("seed", 42)
         )
