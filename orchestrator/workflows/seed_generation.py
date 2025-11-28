@@ -37,26 +37,42 @@ class SeedGenerator:
     def run(self):
         logger.info("Starting Seed Generation Phase...")
 
-        # 1. Random Generation
-        # Create temp config for random scenario
-        random_conf = {
-            "type": "random",
+        # Determine Generation Config based on Crystal Type
+        crystal_type = self.config.seed_generation.crystal_type
+        logger.info(f"Crystal Type: {crystal_type}")
+
+        gen_config = {
+            "type": "random", # Default fallback
             "elements": self.config.md_params.elements,
             "n_structures": self.config.seed_generation.n_random_structures,
-            "max_atoms": 8
+            "max_atoms": 8,
+            "crystal_type": crystal_type # Pass this along
         }
 
-        rand_conf_name = get_unique_filename("random_conf", ".yaml")
+        # Merge type-specific generation settings
+        if crystal_type in self.config.seed_generation.types:
+             type_spec = self.config.seed_generation.types[crystal_type]
+             gen_settings = type_spec.get("generation", {})
+             gen_config.update(gen_settings)
+
+             # If type is not random, we update the scenario 'type' to match or let the factory decide
+             # The Factory uses 'type' if 'crystal_type' is not set, or prioritizes 'crystal_type'.
+             # In our implementation of Factory, we prioritize 'crystal_type'.
+             # So 'type': 'random' in gen_config acts as fallback.
+
+        # 1. Structure Generation
+        # Create temp config for scenario
+        rand_conf_name = get_unique_filename(f"gen_conf_{crystal_type}", ".yaml")
         rand_out_name = get_unique_filename("random_structures", ".xyz")
 
         with open(self.host_data_dir / rand_conf_name, "w") as f:
-            yaml.dump(random_conf, f)
+            yaml.dump(gen_config, f)
 
-        logger.info(f"Generating {self.config.seed_generation.n_random_structures} random structures...")
+        logger.info(f"Generating {self.config.seed_generation.n_random_structures} structures using {crystal_type} strategy...")
         try:
             self.gen_worker.generate(rand_conf_name, rand_out_name)
         except Exception as e:
-            logger.error(f"Random generation failed: {e}")
+            logger.error(f"Structure generation failed: {e}")
             raise e
 
         # 2. Multi-temperature Exploration (replacing MACE Filter)

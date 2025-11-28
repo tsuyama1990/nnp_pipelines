@@ -145,6 +145,16 @@ generation:
 # Configuration for the initial multi-temperature exploration (Phase 1).
 # -----------------------------------------------------------------------------
 seed_generation:
+  crystal_type: "metallic"
+  types:
+    metallic:
+      generation: {features: ["stacking_faults", "grain_boundaries"]}
+      dft_settings: {occupations: "smearing", smearing: "mv", degauss: 0.02}
+    ionic:
+      dft_settings: {occupations: "fixed"}
+    covalent:
+      dft_settings: {occupations: "fixed"}
+
   # Number of initial random structures to generate.
   n_random_structures: 100
 

@@ -35,6 +35,49 @@ class AlloyGenerator(BaseGenerator):
     Focus: Entropy, Random Substitution, GBs, Phase Separation.
     """
 
+    def generate_stacking_faults(self):
+        """
+        Generates stacking faults for metallic systems.
+        """
+        # Close-packed planes (e.g., (111) for FCC)
+        try:
+            # Convert to ASE Atoms for manipulation if not already
+            if isinstance(self.structure, Structure):
+                atoms = AseAtomsAdaptor.get_atoms(self.structure)
+            else:
+                atoms = self.structure.copy()
+
+            # Create Supercell using ASE syntax
+            atoms = atoms * (1, 1, 6)
+
+            # Shift a layer to create stacking fault
+            # We select atoms above a certain Z height and shift them
+
+            # Use ASE array access
+            positions = atoms.get_positions()
+            z_coords = positions[:, 2]
+
+            min_z = np.min(z_coords)
+            max_z = np.max(z_coords)
+            mid_z = (min_z + max_z) / 2.0
+
+            # Shift upper half
+            shift_vector = np.array([1.5, 0.0, 0.0]) # Approximate shift
+
+            # Apply shift to atoms above mid_z
+            mask = z_coords > mid_z
+            positions[mask] += shift_vector
+
+            atoms.set_positions(positions)
+
+            self._add_structure(atoms, meta={"type": "stacking_fault"})
+
+        except Exception as e:
+            # Using print if logger not configured in this context, or pass logging.
+            # Base class has logger.
+            from .base import logger
+            logger.warning(f"Stacking Fault Generation failed: {e}")
+
     def generate_random_substitution(self, elements: List[str] = None, supercell_dim: int = 3):
         """
         Generates SQS-like random substitutions in a supercell.
@@ -144,7 +187,33 @@ class AlloyGenerator(BaseGenerator):
         self._add_structure(sc, meta={"type": "phase_separation", "mode": "clustering"})
 
     def generate_all(self) -> List[Atoms]:
-        self.generate_random_substitution() # Shuffle existing
-        self.generate_grain_boundaries()
-        self.generate_phase_separation()
+        features = self.config.get("features", [])
+
+        # Default behavior: if no features specified, maybe run defaults?
+        # Or if "features" key is missing, run all?
+        # Prompt said: "Ensure this method is called ... if it is enabled in the config."
+        # The example config shows explicit "features" list.
+        # Let's assume if "features" is present, we filter.
+        # If not present, we might default to some set or none.
+        # Given the "Factory Switch" goal, let's be explicit.
+        # But we should preserve legacy behavior if possible (random subst seems core).
+
+        # Let's run random substitution always as it defines the alloy mixing?
+        # Or check if it's in features?
+        # The previous code ran everything.
+        # Let's check features if present. If not, maybe run all?
+        # But to be safe and follow instruction: "Enable users to define crystal_type... Select appropriate Structure Generator".
+
+        if not features or "random_substitution" in features:
+             self.generate_random_substitution()
+
+        if not features or "grain_boundaries" in features:
+             self.generate_grain_boundaries()
+
+        if not features or "phase_separation" in features:
+             self.generate_phase_separation()
+
+        if features and "stacking_faults" in features:
+             self.generate_stacking_faults()
+
         return self.generated_structures

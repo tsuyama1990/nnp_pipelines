@@ -51,12 +51,26 @@ def main():
         # E0 dict
         e0_dict = {} # Placeholder
 
+        # Resolve DFT settings for the active crystal type
+        dft_overrides = {}
+        try:
+            c_type = config.seed_generation.crystal_type
+            if c_type != "random":
+                # Support both naming conventions for robustness (types vs type_settings)
+                types_map = getattr(config.seed_generation, "types", {}) or \
+                            getattr(config.seed_generation, "type_settings", {})
+
+                if c_type in types_map:
+                    dft_overrides = types_map[c_type].get("dft_settings", {})
+        except AttributeError:
+             pass
+
         for i, atoms in enumerate(all_atoms):
             try:
                 print(f"Labeling structure {i+1}/{len(all_atoms)}...")
                 elements = sorted(list(set(atoms.get_chemical_symbols())))
 
-                dft_configurator = DFTConfigurator(params=config.dft_params, meta=meta)
+                dft_configurator = DFTConfigurator(params=config.dft_params, meta=meta, type_dft_settings=dft_overrides)
                 ref_calc, mag_settings = dft_configurator.build(atoms, elements, kpts=None)
 
                 labeler = DeltaLabeler(
