@@ -4,6 +4,7 @@ Responsible for creating LAMMPS input scripts.
 """
 
 from typing import Dict, List
+import numpy as np
 
 class LAMMPSInputGenerator:
     """Responsible for generating LAMMPS input scripts."""
@@ -61,11 +62,19 @@ class LAMMPSInputGenerator:
         if potential_path and potential_path.lower() != "none":
             lines.append(f"pair_style hybrid/overlay pace/extrapolation lj/cut {rcut}")
             lines.append(f"pair_coeff * * pace/extrapolation {potential_path} {element_map}")
-            lines.append(f"pair_coeff * * lj/cut {epsilon} {sigma}")
+            # If we are using hybrid/overlay, we still need to specify LJ coeffs.
+            # But wait, usually overlay is for Delta Learning, where we add LJ to ACE/PACE?
+            # Or PACE already includes everything?
+            # "The pipeline currently uses ... ShiftedLennardJones ... and LAMMPS generation ... This is physically inaccurate ... creates a poor baseline for Delta Learning."
+            # So yes, we need to add LJ baseline.
+
+            # For hybrid/overlay, we need to specify pair coefficients for lj/cut as well.
+            self._write_lj_coeffs(lines, elements, epsilon, sigma, is_hybrid=True)
+
         else:
             # Pure LJ mode (Seed Generation)
             lines.append(f"pair_style lj/cut {rcut}")
-            lines.append(f"pair_coeff * * {epsilon} {sigma}")
+            self._write_lj_coeffs(lines, elements, epsilon, sigma, is_hybrid=False)
 
         # Enforce consistency with Python side ShiftedLennardJones
         if shift_energy:
@@ -107,3 +116,47 @@ class LAMMPSInputGenerator:
 
         with open(filepath, "w") as f:
             f.write("\n".join(lines))
+
+    def _write_lj_coeffs(self, lines: list, elements: list, epsilon, sigma, is_hybrid: bool):
+        """Writes pair_coeff lines handling both scalar and dictionary parameters."""
+
+        # Check if parameters are dictionaries
+        is_dict_eps = isinstance(epsilon, dict)
+        is_dict_sig = isinstance(sigma, dict)
+
+        if is_dict_eps != is_dict_sig:
+             # This should ideally not happen if validated, but let's fallback to scalar if mixed or raise error.
+             # Assuming if one is dict, other should be too.
+             pass
+
+        if is_dict_eps and is_dict_sig:
+            # Iterate over all unique pairs
+            n = len(elements)
+            for i in range(n):
+                for j in range(i, n):
+                    el_i = elements[i]
+                    el_j = elements[j]
+
+                    eps_i = epsilon[el_i]
+                    eps_j = epsilon[el_j]
+                    sig_i = sigma[el_i]
+                    sig_j = sigma[el_j]
+
+                    # Mixing rules
+                    eps_ij = np.sqrt(eps_i * eps_j)
+                    sig_ij = (sig_i + sig_j) / 2.0
+
+                    # Type indices are 1-based
+                    type_i = i + 1
+                    type_j = j + 1
+
+                    if is_hybrid:
+                        lines.append(f"pair_coeff {type_i} {type_j} lj/cut {eps_ij} {sig_ij}")
+                    else:
+                        lines.append(f"pair_coeff {type_i} {type_j} {eps_ij} {sig_ij}")
+        else:
+            # Fallback to wildcard
+            if is_hybrid:
+                 lines.append(f"pair_coeff * * lj/cut {epsilon} {sigma}")
+            else:
+                 lines.append(f"pair_coeff * * {epsilon} {sigma}")
