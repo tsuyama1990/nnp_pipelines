@@ -8,7 +8,7 @@ from ase.io import read
 
 from shared.core.config import Config
 from orchestrator.src.wrappers.gen_wrapper import GenWorker
-from orchestrator.src.wrappers.dft_worker import DftWorker
+from orchestrator.src.wrappers.dft_wrapper import DftWorker
 from orchestrator.src.wrappers.pace_wrapper import PaceWorker
 
 logger = logging.getLogger(__name__)

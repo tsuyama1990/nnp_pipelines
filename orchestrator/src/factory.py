@@ -8,7 +8,7 @@ from .adapters import (
     DockerStructureGenerator, DockerKMCEngine, DockerValidator
 )
 from .wrappers.lammps_wrapper import LammpsWorker
-from .wrappers.dft_worker import DftWorker
+from .wrappers.dft_wrapper import DftWorker
 from .wrappers.pace_wrapper import PaceWorker
 from .wrappers.gen_wrapper import GenWorker
 

@@ -21,6 +21,10 @@ from orchestrator.src.factory import ComponentFactory
 from orchestrator.workflows.orchestrator import ActiveLearningOrchestrator
 from orchestrator.workflows.seed_generation import SeedGenerator
 from shared.utils.logger import CSVLogger
+from orchestrator.src.state_manager import StateManager
+from orchestrator.src.services.md_service import MDService
+from orchestrator.src.services.al_service import ActiveLearningService
+from orchestrator.src.services.kmc_service import KMCService
 
 # Setup logging
 logging.basicConfig(
@@ -63,17 +67,20 @@ class AppBuilder:
             logger.exception(f"Failed to initialize components: {e}")
             sys.exit(1)
 
+        # Instantiate Services
+        md_service = MDService(md_engine, self.config)
+        kmc_service = KMCService(kmc_engine, self.config)
+        al_service = ActiveLearningService(sampler, generator, labeler, trainer, validator, self.config)
+        state_manager = StateManager(Path("data"))
+
         csv_logger = CSVLogger()
 
         orchestrator = ActiveLearningOrchestrator(
             config=self.config,
-            md_engine=md_engine,
-            kmc_engine=kmc_engine,
-            sampler=sampler,
-            generator=generator,
-            labeler=labeler,
-            trainer=trainer,
-            validator=validator,
+            md_service=md_service,
+            al_service=al_service,
+            kmc_service=kmc_service,
+            state_manager=state_manager,
             csv_logger=csv_logger
         )
 
