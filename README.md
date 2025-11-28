@@ -8,7 +8,7 @@ This project follows a **Micro-kernel Architecture**:
 
 *   **Orchestrator (Host)**: A lightweight Python application that manages the active learning loop, state, and decision logic. It does not perform heavy computations itself.
 *   **Workers (Docker Containers)**: Specialized, isolated environments for heavy computational tasks. The Orchestrator invokes these workers via `docker run`.
-    *   `gen_worker`: Generates candidate structures using MACE (Foundational ML Force Field).
+    *   `gen_worker`: Generates candidate structures using MACE (Foundational ML Force Field) and PyXtal (Symmetry-based generation).
     *   `dft_worker`: Performs First-Principles calculations (Quantum Espresso) to label data.
     *   `pace_worker`: Trains ACE potentials and performs uncertainty-based sampling (Pacemaker).
     *   `lammps_worker`: Runs Molecular Dynamics (MD) and Kinetic Monte Carlo (kMC) simulations (LAMMPS).
@@ -53,6 +53,8 @@ This project follows a **Micro-kernel Architecture**:
 1.  **Configuration:**
     Edit `config.yaml` to set your experiment parameters (elements, temperature, DFT settings, etc.).
 
+    *   **Structure Generation:** You can configure `gen_worker` to use strategies like `random_symmetry` (PyXtal) to explore new structures. See `workers/gen_worker/README.md` for details.
+
 2.  **Run the Orchestrator:**
     ```bash
     uv run orchestrator/main.py
@@ -72,7 +74,7 @@ This project follows a **Micro-kernel Architecture**:
     *   `src/services/`: Business logic for MD, KMC, and Active Learning.
 *   `workers/`: Source code and Dockerfiles for computational workers.
     *   `dft_worker/`: Quantum Espresso wrapper.
-    *   `gen_worker/`: MACE structure generation.
+    *   `gen_worker/`: MACE structure generation and PyXtal integration.
     *   `pace_worker/`: Pacemaker training and sampling.
     *   `lammps_worker/`: LAMMPS MD/KMC engine.
 *   `shared/`: Common Python code (Config, Data Structures) shared between Host and Workers.

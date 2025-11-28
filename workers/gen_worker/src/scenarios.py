@@ -2,12 +2,21 @@
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+import logging
 
 from ase import Atoms
 from ase.build import bulk, surface, stack
 import numpy as np
 
 from candidate import RandomStructureGenerator
+
+# Try to import pyxtal
+try:
+    from pyxtal import pyxtal
+    PYXTAL_AVAILABLE = True
+except ImportError:
+    PYXTAL_AVAILABLE = False
+
 
 class BaseScenario(ABC):
     """Abstract base class for scenario generators."""
@@ -145,12 +154,86 @@ class RandomScenario(BaseScenario):
         n_structures = self.config.get("n_structures", 10)
         max_atoms = self.config.get("max_atoms", 8)
 
+        # Deprecated: usage of candidate.RandomStructureGenerator
+        # Keeping it for backward compatibility if configured explicitly as 'random'
+        # without using the new RandomSymmetryScenario logic
         try:
             gen = RandomStructureGenerator(elements=elements, max_atoms=max_atoms)
             return gen.generate(n_structures)
         except ImportError:
             print("PyXtal not available.")
             return []
+
+class RandomSymmetryScenario(BaseScenario):
+    """Generates random structures using PyXtal with explicit symmetry control."""
+
+    def generate(self) -> List[Atoms]:
+        if not PYXTAL_AVAILABLE:
+            print("PyXtal not available. Skipping RandomSymmetryScenario.")
+            return []
+
+        elements = self.config.get("elements", [])
+        num_structures = self.config.get("num_structures", 5)
+        space_group_range = self.config.get("space_group_range", [1, 230])
+        volume_factor = self.config.get("volume_factor", 1.0)
+        max_attempts = self.config.get("max_attempts", 50)
+
+        # Determine number of atoms per species
+        composition = self.config.get("composition")
+
+        # Parse composition once if possible
+        species_fixed = []
+        num_ions_fixed = []
+        if composition:
+            species_fixed = list(composition.keys())
+            num_ions_fixed = list(composition.values())
+
+        if not composition and not elements:
+             print("No elements provided for RandomSymmetryScenario.")
+             return []
+
+        # Parse space group range once
+        if len(space_group_range) != 2:
+             sg_start, sg_end = 1, 230
+        else:
+             sg_start, sg_end = space_group_range[0], space_group_range[1]
+
+        generated_structures: List[Atoms] = []
+        attempts = 0
+
+        while len(generated_structures) < num_structures and attempts < max_attempts * num_structures:
+            attempts += 1
+
+            # Select random space group
+            sg = np.random.randint(sg_start, sg_end + 1)
+
+            # Select composition if not fixed
+            if composition:
+                species = species_fixed
+                num_ions = num_ions_fixed
+            else:
+                species = elements
+                # Random number of ions between 1 and 4 per species
+                num_ions = [np.random.randint(1, 5) for _ in elements]
+
+            try:
+                struc = pyxtal()
+                # from_random arguments: dim, group, species, numIons, factor
+                struc.from_random(3, sg, species, num_ions, factor=volume_factor)
+
+                if struc.valid:
+                    atoms = struc.to_ase(resort=False)
+                    generated_structures.append(atoms)
+
+            except Exception as e:
+                # PyXtal generation failed for this attempt
+                continue
+
+        if len(generated_structures) < num_structures:
+            print(f"Warning: Only generated {len(generated_structures)}/{num_structures} structures after {attempts} attempts.")
+
+        return generated_structures
+
 
 class ScenarioFactory:
     """Factory to create scenario generators."""
@@ -168,5 +251,7 @@ class ScenarioFactory:
             return GrainBoundaryGenerator(config)
         elif t == "random":
             return RandomScenario(config)
+        elif t == "random_symmetry":
+            return RandomSymmetryScenario(config)
         else:
             raise ValueError(f"Unknown scenario type: {t}")

@@ -165,13 +165,23 @@ class PreOptimizationParams:
     steps: int = 50
     device: str = "cuda"
 
-
 @dataclass
 class GenerationParams:
     """Parameters for scenario-driven generation."""
     pre_optimization: PreOptimizationParams = field(default_factory=PreOptimizationParams)
     scenarios: List[Dict[str, Any]] = field(default_factory=list)
     device: str = "cuda"
+    # Note: 'scenarios' is a list of dictionaries where each dict defines a specific generation task.
+    # Supported types include: 'interface', 'surface', 'defect', 'grain_boundary', 'random', 'random_symmetry'.
+    # Example for 'random_symmetry':
+    # {
+    #   "type": "random_symmetry",
+    #   "elements": ["Al", "Cu"],
+    #   "num_structures": 10,
+    #   "space_group_range": [1, 230],
+    #   "volume_factor": 1.0,
+    #   "composition": {"Al": 4, "Cu": 4}  # Optional
+    # }
 
 
 @dataclass

@@ -8,6 +8,7 @@ import logging
 from typing import List
 import numpy as np
 from ase import Atoms
+from ase.geometry import get_distances
 
 try:
     from mace.calculators import mace_mp
@@ -15,6 +16,32 @@ except ImportError:
     mace_mp = None
 
 logger = logging.getLogger(__name__)
+
+def check_min_distance(atoms: Atoms, min_dist: float = 0.5) -> bool:
+    """Check if any pair of atoms is closer than min_dist.
+
+    Args:
+        atoms: The ASE Atoms object to check.
+        min_dist: Minimum allowed distance in Angstroms.
+
+    Returns:
+        True if all distances are >= min_dist, False otherwise.
+    """
+    if len(atoms) < 2:
+        return True
+
+    # get_distances returns arrays of distances.
+    # We can use get_all_distances from ASE, which uses mic=True by default for periodic systems usually,
+    # but let's be explicit.
+    # atoms.get_all_distances(mic=True) returns a matrix.
+
+    dists = atoms.get_all_distances(mic=True)
+
+    # We only care about off-diagonal elements (distance to self is 0)
+    np.fill_diagonal(dists, min_dist + 1.0)
+
+    min_d = np.min(dists)
+    return min_d >= min_dist
 
 
 class MACEFilter:
@@ -74,6 +101,11 @@ class MACEFilter:
         valid_structures = []
 
         for atoms in structures:
+            # First, fast check for atomic overlaps
+            if not check_min_distance(atoms, min_dist=0.5):
+                logger.debug("Structure rejected: Atoms too close.")
+                continue
+
             try:
                 # Perform calculation
                 atoms.calc = self.calc
