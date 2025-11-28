@@ -14,11 +14,15 @@ class LammpsWorker(DockerWrapper):
             "python", "/app/src/main.py", "md",
             "--config", f"{self.container_data_dir}/{config_filename}",
             "--meta-config", f"{self.container_data_dir}/{meta_config_filename}",
-            "--potential", f"{self.container_data_dir}/{potential_filename}",
             "--structure", f"{self.container_data_dir}/{structure_filename}",
             "--steps", str(steps),
             "--gamma", str(gamma)
         ]
+
+        if potential_filename is not None:
+             cmd.extend(["--potential", f"{self.container_data_dir}/{potential_filename}"])
+        else:
+             cmd.extend(["--potential", "None"])
 
         if restart:
             cmd.append("--restart")

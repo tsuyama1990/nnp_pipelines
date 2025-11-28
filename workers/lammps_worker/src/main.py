@@ -88,7 +88,7 @@ def main():
     md_parser = subparsers.add_parser("md")
     md_parser.add_argument("--config", required=True)
     md_parser.add_argument("--meta-config", required=True)
-    md_parser.add_argument("--potential", required=True)
+    md_parser.add_argument("--potential", required=False, default=None, help="Path to ACE potential (optional)")
     md_parser.add_argument("--structure", required=True)
     md_parser.add_argument("--steps", type=int, required=True)
     md_parser.add_argument("--gamma", type=float, required=True)
