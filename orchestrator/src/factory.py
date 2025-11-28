@@ -12,6 +12,15 @@ from .wrappers.dft_wrapper import DftWorker
 from .wrappers.pace_wrapper import PaceWorker
 from .wrappers.gen_wrapper import GenWorker
 
+from orchestrator.src.interfaces.explorer import BaseExplorer
+from orchestrator.src.services.md_service import MDService
+from orchestrator.src.services.kmc_service import KMCService
+from orchestrator.src.services.al_service import ActiveLearningService
+from orchestrator.src.explorers.lammps_md_explorer import LammpsMDExplorer
+from orchestrator.src.explorers.kmc_explorer import KMCExplorer
+from orchestrator.src.explorers.ase_md_explorer import AseMDExplorer
+from orchestrator.src.explorers.hybrid_explorer import HybridExplorer
+
 logger = logging.getLogger(__name__)
 
 class ComponentFactory:
@@ -66,3 +75,36 @@ class ComponentFactory:
     def create_validator(self) -> Validator:
         wrapper = PaceWorker(self.host_data_dir)
         return DockerValidator(wrapper, self.config_path.name, self.meta_config_path.name)
+
+    def create_explorer(self, al_service: ActiveLearningService) -> BaseExplorer:
+        """Creates the appropriate Explorer based on configuration."""
+        strategy = self.config.exploration.strategy
+
+        logger.info(f"Creating explorer for strategy: {strategy}")
+
+        if strategy == "lammps_md":
+            md_engine = self.create_md_engine()
+            md_service = MDService(md_engine, self.config)
+            return LammpsMDExplorer(md_service, self.config)
+
+        elif strategy == "kmc":
+            kmc_engine = self.create_kmc_engine()
+            kmc_service = KMCService(kmc_engine, self.config)
+            return KMCExplorer(kmc_service, al_service, self.config)
+
+        elif strategy == "ase_md":
+            return AseMDExplorer(self.config)
+
+        elif strategy == "hybrid":
+            md_engine = self.create_md_engine()
+            md_service = MDService(md_engine, self.config)
+            md_explorer = LammpsMDExplorer(md_service, self.config)
+
+            kmc_engine = self.create_kmc_engine()
+            kmc_service = KMCService(kmc_engine, self.config)
+            kmc_explorer = KMCExplorer(kmc_service, al_service, self.config)
+
+            return HybridExplorer(md_explorer, kmc_explorer)
+
+        else:
+            raise ValueError(f"Unknown exploration strategy: {strategy}")

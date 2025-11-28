@@ -74,6 +74,12 @@ class ExperimentConfig:
 
 
 @dataclass
+class ExplorationParams:
+    """Parameters for choosing the exploration strategy."""
+    strategy: str = "hybrid"
+
+
+@dataclass
 class MDParams:
     """Parameters for Molecular Dynamics simulations."""
     timestep: float
@@ -197,6 +203,7 @@ class Config:
     """Main configuration class aggregating all parameter sections."""
     meta: MetaConfig
     experiment: ExperimentConfig
+    exploration: ExplorationParams
     md_params: MDParams
     al_params: ALParams
     dft_params: DFTParams
@@ -290,6 +297,7 @@ class Config:
                 name=exp_dict.get("name", "experiment"),
                 output_dir=Path(exp_dict.get("output_dir", "output"))
             ),
+            exploration=ExplorationParams(**config_dict.get("exploration", {})),
             md_params=MDParams(**md_dict),
             al_params=ALParams(**config_dict.get("al_params", {})),
             kmc_params=KMCParams(**config_dict.get("kmc_params", {})),

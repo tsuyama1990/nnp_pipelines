@@ -15,6 +15,13 @@ experiment:
   output_dir: "output/experiment_01"
 
 # -----------------------------------------------------------------------------
+# Exploration Strategy
+# -----------------------------------------------------------------------------
+exploration:
+  # Strategy to use: "lammps_md", "ase_md", "kmc", "hybrid" (MD + KMC)
+  strategy: "hybrid"
+
+# -----------------------------------------------------------------------------
 # Molecular Dynamics (MD) Parameters
 # Configuration for the MD engine (LAMMPS).
 # -----------------------------------------------------------------------------
