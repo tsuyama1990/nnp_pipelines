@@ -9,6 +9,9 @@ from ase.build import bulk, surface, stack
 import numpy as np
 
 from candidate import RandomStructureGenerator
+from shared.autostructure.alloy import AlloyGenerator
+from shared.autostructure.ionic import IonicGenerator
+from shared.autostructure.covalent import CovalentGenerator
 
 # Try to import pyxtal
 try:
@@ -235,12 +238,85 @@ class RandomSymmetryScenario(BaseScenario):
         return generated_structures
 
 
+class CrystalAwareScenario(BaseScenario):
+    """Adapter for Crystal-Aware Generators from shared.autostructure."""
+
+    def __init__(self, config: Dict[str, Any], generator_cls):
+        super().__init__(config)
+        self.generator_cls = generator_cls
+
+    def generate(self) -> List[Atoms]:
+        # Need a base structure to start with.
+        # This wrapper assumes the Scenario is called with a 'base_structure' in config
+        # or it creates a simple one if possible, or generates from scratch if the generator supports it.
+        # Most shared.autostructure generators require a base_structure in __init__.
+        # We need to bridge this.
+
+        # If 'structure' is passed in config (as Atoms object or similar), use it.
+        # But config usually comes from YAML.
+        # Maybe we need to generate a seed structure first (e.g. from elements/lattice)?
+
+        # For now, let's assume the config provides parameters to build a simple bulk,
+        # or we reuse RandomSymmetry to get a seed, then apply the generator.
+
+        # BUT, the prompt says: "If "metallic" -> Instantiate AlloyGenerator... Pass the generation params".
+        # AlloyGenerator needs `base_structure`.
+
+        # Let's create a simple bulk based on elements if not provided.
+        elements = self.config.get("elements", [])
+        if not elements:
+            # Fallback
+            return []
+
+        # Create a simple random/bulk structure to seed the generator
+        # Or check if 'structure' is in config.
+
+        import ase.build
+
+        # Try to build a simple structure
+        # If multiple elements, maybe a random alloy or just the first element?
+        # Let's use `bulk` for the first element as a placeholder seed if nothing else exists.
+        try:
+             # Use RandomSymmetry to get a valid starting point?
+             # Or just a simple bulk.
+             seed = ase.build.bulk(elements[0], cubic=True)
+        except Exception as e:
+             logging.error(f"Failed to create seed structure for CrystalAwareScenario: {e}")
+             return []
+
+        # Instantiate the generator
+        gen = self.generator_cls(seed, lj_params=None)
+
+        # Configure the generator?
+        # The generator classes (AlloyGenerator etc) use `generate_all()` which calls specific methods.
+        # We might want to selectively call methods based on config, but `generate_all` does everything.
+        # The prompt says: "Pass the generation params from config to these generators."
+        # The generator base class has `self.config` but it's not populated in __init__ in the current code I read.
+        # Wait, BaseGenerator has `self.config = {}`.
+        # So we can set it.
+
+        gen.config = self.config
+
+        return gen.generate_all()
+
+
 class ScenarioFactory:
     """Factory to create scenario generators."""
 
     @staticmethod
     def create(config: Dict[str, Any]) -> BaseScenario:
         t = config.get("type")
+        crystal_type = config.get("crystal_type")
+
+        # Dispatch based on crystal_type if present
+        if crystal_type == "metallic":
+             return CrystalAwareScenario(config, AlloyGenerator)
+        elif crystal_type == "ionic":
+             return CrystalAwareScenario(config, IonicGenerator)
+        elif crystal_type == "covalent":
+             return CrystalAwareScenario(config, CovalentGenerator)
+
+        # Legacy dispatch
         if t == "interface":
             return InterfaceGenerator(config)
         elif t == "surface":
@@ -254,4 +330,8 @@ class ScenarioFactory:
         elif t == "random_symmetry":
             return RandomSymmetryScenario(config)
         else:
+            # If no type matches, default to Random or raise
+            # If crystal_type was "random", we might fall through here if t is missing.
+            if crystal_type == "random":
+                 return RandomScenario(config)
             raise ValueError(f"Unknown scenario type: {t}")

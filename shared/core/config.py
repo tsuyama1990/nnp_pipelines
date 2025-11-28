@@ -9,8 +9,10 @@ import numpy as np
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Literal
 from ase.data import atomic_numbers, covalent_radii
+
+CrystalType = Literal["metallic", "ionic", "covalent", "random"]
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +170,9 @@ class PreOptimizationParams:
 @dataclass
 class SeedGenerationParams:
     """Parameters for the Seed Generation phase."""
+    crystal_type: CrystalType = "random"
+    # Mapping 'types' from yaml to 'type_settings' here or rename field to 'types'
+    types: Dict[str, Any] = field(default_factory=dict)
     n_random_structures: int = 100
     exploration_temperatures: List[float] = field(default_factory=lambda: [300.0, 1000.0])
     n_md_steps: int = 1000
@@ -292,6 +297,10 @@ class Config:
         md_dict = config_dict.get("md_params", {})
 
         seed_gen_dict = config_dict.get("seed_generation", {})
+
+        # Ensure 'types' key is preserved if present
+        if "types" in seed_gen_dict:
+             seed_gen_dict["types"] = seed_gen_dict["types"]
 
         lj_dict = config_dict.get("lj_params", {})
         if not lj_dict:

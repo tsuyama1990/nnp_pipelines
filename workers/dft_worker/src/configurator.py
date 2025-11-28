@@ -24,15 +24,17 @@ logger = logging.getLogger(__name__)
 class DFTConfigurator:
     """Builder for DFT Calculators merging Config and Heuristics."""
 
-    def __init__(self, params: DFTParams, meta: MetaConfig):
+    def __init__(self, params: DFTParams, meta: MetaConfig, type_dft_settings: Optional[Dict[str, Any]] = None):
         """Initialize with DFT parameters.
 
         Args:
             params: The static DFT configuration.
             meta: The environment configuration (paths, commands).
+            type_dft_settings: Specific settings for the active crystal type.
         """
         self.params = params
         self.meta = meta
+        self.type_dft_settings = type_dft_settings or {}
 
     def build(self, atoms: Atoms, elements: List[str], kpts: Optional[tuple] = None) -> tuple[Espresso, Dict[str, float]]:
         """Build a configured Espresso calculator.
@@ -88,6 +90,33 @@ class DFTConfigurator:
                 input_data["system"]["nspin"] = 2
                 magnetism_settings = mag_rec.get("moments", {})
                 logger.info("Auto-Physics: Enabled Spin Polarization (nspin=2)")
+
+        # 3.5 Apply Type-Specific Settings (Override)
+        if self.type_dft_settings:
+            # Override system block
+            # Settings might be flat or nested?
+            # Prompt says: dft_settings: {occupations: "smearing", smearing: "mv", degauss: 0.02}
+            # These usually go into 'system'.
+
+            # We assume the settings are flat and map mostly to 'system' unless specified.
+            # Common QE tags: occupations, smearing, degauss -> system
+            # mixing_beta, conv_thr -> electrons
+
+            # Simple heuristic mapping for flat dict:
+            system_keys = ["occupations", "smearing", "degauss", "ecutwfc", "ecutrho"]
+            electrons_keys = ["mixing_beta", "conv_thr", "electron_maxstep"]
+
+            for key, val in self.type_dft_settings.items():
+                if key in system_keys:
+                    input_data["system"][key] = val
+                elif key in electrons_keys:
+                    input_data["electrons"][key] = val
+                else:
+                    # Default to system if unknown, or maybe control?
+                    # Let's put in system as fallback or log warning.
+                    input_data["system"][key] = val
+
+            logger.info(f"Applied explicit DFT settings for crystal type: {self.type_dft_settings}")
 
         # 4. Handle System Charge
         if 'charge' in atoms.info:
