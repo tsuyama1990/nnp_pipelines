@@ -128,7 +128,17 @@ dft_params:
 # Scenarios for Seed Generation (Phase 1).
 # -----------------------------------------------------------------------------
 generation:
-  scenarios: []
+  scenarios:
+    # Example: Random structure generation using PyXtal
+    - type: "random_symmetry"
+      elements: ["Al", "Cu"]
+      num_structures: 10
+      space_group_range: [1, 230]
+      volume_factor: 1.0
+      # Optional: Explicit composition (number of atoms per species)
+      # composition:
+      #   Al: 4
+      #   Cu: 4
 
 # -----------------------------------------------------------------------------
 # ACE Model Configuration (Pacemaker Pass-through)
