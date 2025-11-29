@@ -19,7 +19,9 @@ logging.basicConfig(level=logging.INFO)
 def run_md(args, config):
     lj_dict = asdict(config.lj_params)
     md_dict = asdict(config.md_params)
-    generator = LAMMPSInputGenerator(lj_params=lj_dict, md_params=md_dict)
+    # Extract delta_learning_mode, default to True if missing (though config enforces it)
+    delta_mode = getattr(config.ace_model, "delta_learning_mode", True)
+    generator = LAMMPSInputGenerator(lj_params=lj_dict, md_params=md_dict, delta_learning_mode=delta_mode)
     runner = LAMMPSRunner(cmd=config.meta.lammps_command, input_generator=generator)
 
     result = runner.run(

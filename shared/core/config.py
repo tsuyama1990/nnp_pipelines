@@ -202,6 +202,7 @@ class ACEModelParams:
     """Parameters for Pacemaker potential model."""
     pacemaker_config: Dict[str, Any] = field(default_factory=dict)
     initial_potentials: List[str] = field(default_factory=list)
+    delta_learning_mode: bool = True
 
 
 @dataclass

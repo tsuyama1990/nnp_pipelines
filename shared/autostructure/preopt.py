@@ -2,9 +2,13 @@ import numpy as np
 from typing import Dict, Set, Optional
 from ase import Atoms
 from ase.calculators.calculator import Calculator
-from ase.calculators.emt import EMT
-from ase.calculators.lj import LennardJones
 from ase.optimize import BFGS
+
+try:
+    from mace.calculators import mace_mp
+    HAS_MACE = True
+except ImportError:
+    HAS_MACE = False
 
 class PreOptimizer:
     """
@@ -27,43 +31,28 @@ class PreOptimizer:
     ):
         """
         Args:
-            lj_params (Dict[str, float]): LJ parameters (sigma, epsilon, cutoff).
-            emt_elements (Set[str], optional): Elements allowed for EMT.
-                                               Defaults to standard ASE EMT elements.
+            lj_params (Dict[str, float]): LJ parameters (Ignored in MACE upgrade).
+            emt_elements (Set[str], optional): Elements allowed for EMT (Ignored in MACE upgrade).
             fmax (float): Maximum force threshold for relaxation.
             steps (int): Maximum number of relaxation steps.
             mic_distance (float): Minimum interatomic distance threshold (Å) for discarding.
         """
-        # Flatten parameters to ensure no hardcoding and explicit usage
-        self.lj_epsilon = lj_params['epsilon']
-        self.lj_sigma = lj_params['sigma']
-        self.lj_cutoff = lj_params['cutoff']
-
         self.fmax = fmax
         self.steps = steps
         self.mic_distance = mic_distance
 
-        # Elements supported by ASE's EMT calculator (Standard set)
-        if emt_elements is None:
-            self.emt_elements = {"Al", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "C", "N", "O", "H"}
-        else:
-            self.emt_elements = set(emt_elements)
-
     def get_calculator(self, atoms: Atoms) -> Calculator:
         """
-        Returns an appropriate lightweight calculator (EMT or LJ) for the given structure.
+        Returns an appropriate lightweight calculator (MACE) for the given structure.
         """
-        unique_elements = set(atoms.get_chemical_symbols())
+        if not HAS_MACE:
+            raise ImportError("mace library is not installed. Cannot perform pre-optimization.")
 
-        if unique_elements.issubset(self.emt_elements):
-            return EMT()
-        else:
-            # Use injected parameters
-            return LennardJones(
-                epsilon=self.lj_epsilon,
-                sigma=self.lj_sigma,
-                rc=self.lj_cutoff
-            )
+        try:
+            return mace_mp(model="medium", device="cpu", default_dtype="float64")
+        except Exception as e:
+            print(f"Warning: Failed to load MACE 'medium' model ({e}). Falling back to 'small'.")
+            return mace_mp(model="small", device="cpu", default_dtype="float64")
 
     def run_pre_optimization(self, atoms: Atoms) -> Atoms:
         """
