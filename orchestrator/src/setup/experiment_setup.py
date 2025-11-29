@@ -72,7 +72,7 @@ class ExperimentSetup:
         if not self.configs_dir:
             raise RuntimeError("Directories not created. Call create_directory_structure first.")
 
-        # configs/config_meta.yaml
+        # configs/config_meta.yaml - Snapshotting the meta config
         self._save_yaml(self.meta_config, self.configs_dir / "config_meta.yaml")
 
         # configs/core.yaml

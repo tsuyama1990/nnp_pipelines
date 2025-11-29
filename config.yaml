@@ -5,124 +5,18 @@
 # It should be environment-agnostic.
 # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Experiment Configuration
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Experiment & Global Settings
+# =============================================================================
 experiment:
   # Name of the experiment (used for logging and directory naming)
   name: "default_experiment"
   # Output directory where results, logs, and backup configs will be stored.
   output_dir: "output/experiment_01"
 
-# -----------------------------------------------------------------------------
-# Exploration Strategy
-# -----------------------------------------------------------------------------
-exploration:
-  # Strategy to use: "lammps_md", "ase_md", "kmc", "hybrid" (MD + KMC)
-  strategy: "hybrid"
-
-# -----------------------------------------------------------------------------
-# Molecular Dynamics (MD) Parameters
-# Configuration for the MD engine (LAMMPS).
-# -----------------------------------------------------------------------------
-md_params:
-  # Time step for MD integration in femtoseconds (fs).
-  # Recommended: 0.5 - 2.0
-  timestep: 1.0
-
-  # Target temperature for the simulation in Kelvin (K).
-  temperature: 300.0
-
-  # Target pressure in bar (for NPT ensemble).
-  # Default: 1.0 (Atmospheric pressure)
-  pressure: 1.0
-
-  # Number of MD steps per block/cycle.
-  # Recommended: 1000 - 100000
-  n_steps: 10000
-
-  # List of chemical elements present in the system.
-  elements: ["Al", "Cu"]
-
-  # Path to the initial atomic structure file (e.g., LAMMPS data format).
-  initial_structure: "initial.data"
-
-  # Atomic masses for each element in grams/mole.
-  masses:
-    Al: 26.98
-    Cu: 63.55
-
-  # Frequency (in steps) to write restart files (restart.chk).
-  restart_freq: 1000
-
-  # Frequency (in steps) to write trajectory dump files (dump.lammpstrj).
-  dump_freq: 1000
-
-# -----------------------------------------------------------------------------
-# Active Learning (AL) Parameters
-# Strategies for sampling and uncertainty quantification.
-# -----------------------------------------------------------------------------
-al_params:
-  # Uncertainty threshold (Gamma).
-  # If the max extrapolation grade exceeds this value, MD is halted for retraining.
-  # Recommended: 0.05 - 0.3
-  gamma_threshold: 0.1
-
-  # Number of clusters to sample from high-uncertainty regions.
-  n_clusters: 5
-
-  # Core radius (Angstrom) for cluster extraction.
-  # Atoms within this radius from the center are treated as the active core.
-  r_core: 4.0
-
-  # Size of the cubic box (Angstrom) carved out for labeling.
-  # Should be at least 2x the potential cutoff.
-  box_size: 12.0
-
-  # Path to the initial trained potential (.yace).
-  # If missing, Phase 1 (Seed Generation) is triggered.
-  initial_potential: "potential.yace"
-
-  # Path to the potential definition file (.yaml) defining basis sets.
-  potential_yaml_path: "potential.yaml"
-
-  # (Optional) Path to an initial dataset (.pckl) to bootstrap training.
-  initial_dataset_path: "dataset.pckl"
-
-  # Number of parallel DFT calculations to run during labeling.
-  num_parallel_labeling: 4
-
-# -----------------------------------------------------------------------------
-# Kinetic Monte Carlo (KMC) Parameters
-# Configuration for off-lattice kMC acceleration.
-# -----------------------------------------------------------------------------
-kmc_params:
-  # Enable or disable kMC.
-  active: false
-
-  # Temperature for kMC rate calculations (K).
-  temperature: 300.0
-
-  # Number of saddle point searches (dimer method) per kMC step.
-  n_searches: 10
-
-  # Number of parallel workers for saddle point searches.
-  n_workers: 4
-
-  # List of active species to target for events (e.g., surface atoms).
-  active_species: ["Cu"]
-
-# -----------------------------------------------------------------------------
-# DFT Parameters
-# Physics settings for Quantum Espresso calculations.
-# Note: Command and paths are now in meta_config.yaml.
-# -----------------------------------------------------------------------------
-dft_params:
-  # K-point density for grid generation (1/Angstrom).
-  # Lower values mean denser grids.
-  # Recommended: 0.15 - 0.25
-  kpoint_density: 0.15
-
+# =============================================================================
+# Step 1: Initial Generation
+# =============================================================================
 # -----------------------------------------------------------------------------
 # Generation Parameters
 # Scenarios for Seed Generation (Phase 1).
@@ -140,6 +34,9 @@ generation:
       #   Al: 4
       #   Cu: 4
 
+# =============================================================================
+# Step 2 & 3: Seed Exploration & Sampling
+# =============================================================================
 # -----------------------------------------------------------------------------
 # Seed Generation Parameters
 # Configuration for the initial multi-temperature exploration (Phase 1).
@@ -167,6 +64,23 @@ seed_generation:
   # Final number of diverse structures to sample for DFT.
   n_samples_for_dft: 20
 
+# =============================================================================
+# Step 4: DFT Labeling
+# =============================================================================
+# -----------------------------------------------------------------------------
+# DFT Parameters
+# Physics settings for Quantum Espresso calculations.
+# Note: Command and paths are now in meta_config.yaml.
+# -----------------------------------------------------------------------------
+dft_params:
+  # K-point density for grid generation (1/Angstrom).
+  # Lower values mean denser grids.
+  # Recommended: 0.15 - 0.25
+  kpoint_density: 0.15
+
+# =============================================================================
+# Step 5: Training
+# =============================================================================
 # -----------------------------------------------------------------------------
 # ACE Model Configuration (Pacemaker Pass-through)
 # Defines the potential architecture and training hyperparameters.
@@ -223,3 +137,108 @@ training_params:
 
   # Path to the global dataset accumulating all training data.
   global_dataset_path: "data/global_dataset.pckl"
+
+# =============================================================================
+# Step 6: Production MD
+# =============================================================================
+# -----------------------------------------------------------------------------
+# Molecular Dynamics (MD) Parameters
+# Configuration for the MD engine (LAMMPS).
+# Used in Step 6 (Production) and globally for elements/masses.
+# -----------------------------------------------------------------------------
+md_params:
+  # Time step for MD integration in femtoseconds (fs).
+  # Recommended: 0.5 - 2.0
+  timestep: 1.0
+
+  # Target temperature for the simulation in Kelvin (K).
+  temperature: 300.0
+
+  # Target pressure in bar (for NPT ensemble).
+  # Default: 1.0 (Atmospheric pressure)
+  pressure: 1.0
+
+  # Number of MD steps per block/cycle.
+  # Recommended: 1000 - 100000
+  n_steps: 10000
+
+  # List of chemical elements present in the system.
+  elements: ["Al", "Cu"]
+
+  # Path to the initial atomic structure file (e.g., LAMMPS data format).
+  initial_structure: "initial.data"
+
+  # Atomic masses for each element in grams/mole.
+  masses:
+    Al: 26.98
+    Cu: 63.55
+
+  # Frequency (in steps) to write restart files (restart.chk).
+  restart_freq: 1000
+
+  # Frequency (in steps) to write trajectory dump files (dump.lammpstrj).
+  dump_freq: 1000
+
+# =============================================================================
+# Step 7: Active Learning Loop
+# =============================================================================
+# -----------------------------------------------------------------------------
+# Exploration Strategy
+# -----------------------------------------------------------------------------
+exploration:
+  # Strategy to use: "lammps_md", "ase_md", "kmc", "hybrid" (MD + KMC)
+  strategy: "hybrid"
+
+# -----------------------------------------------------------------------------
+# Active Learning (AL) Parameters
+# Strategies for sampling and uncertainty quantification.
+# -----------------------------------------------------------------------------
+al_params:
+  # Uncertainty threshold (Gamma).
+  # If the max extrapolation grade exceeds this value, MD is halted for retraining.
+  # Recommended: 0.05 - 0.3
+  gamma_threshold: 0.1
+
+  # Number of clusters to sample from high-uncertainty regions.
+  n_clusters: 5
+
+  # Core radius (Angstrom) for cluster extraction.
+  # Atoms within this radius from the center are treated as the active core.
+  r_core: 4.0
+
+  # Size of the cubic box (Angstrom) carved out for labeling.
+  # Should be at least 2x the potential cutoff.
+  box_size: 12.0
+
+  # Path to the initial trained potential (.yace).
+  # If missing, Phase 1 (Seed Generation) is triggered.
+  initial_potential: "potential.yace"
+
+  # Path to the potential definition file (.yaml) defining basis sets.
+  potential_yaml_path: "potential.yaml"
+
+  # (Optional) Path to an initial dataset (.pckl) to bootstrap training.
+  initial_dataset_path: "dataset.pckl"
+
+  # Number of parallel DFT calculations to run during labeling.
+  num_parallel_labeling: 4
+
+# -----------------------------------------------------------------------------
+# Kinetic Monte Carlo (KMC) Parameters
+# Configuration for off-lattice kMC acceleration.
+# -----------------------------------------------------------------------------
+kmc_params:
+  # Enable or disable kMC.
+  active: false
+
+  # Temperature for kMC rate calculations (K).
+  temperature: 300.0
+
+  # Number of saddle point searches (dimer method) per kMC step.
+  n_searches: 10
+
+  # Number of parallel workers for saddle point searches.
+  n_workers: 4
+
+  # List of active species to target for events (e.g., surface atoms).
+  active_species: ["Cu"]
