@@ -154,9 +154,12 @@ class ActiveLearningService:
         logger.info("Training new potential...")
         dataset_path = self.trainer.prepare_dataset(labeled_clusters)
 
-        if asi_path and iteration % 10 == 0:
+        pruning_freq = getattr(self.config.training_params, 'pruning_frequency', 0)
+        pruning_thresh = getattr(self.config.training_params, 'pruning_threshold', 0.99)
+
+        if asi_path and pruning_freq > 0 and iteration % pruning_freq == 0:
              if hasattr(self.trainer, "prune_active_set"):
-                 self.trainer.prune_active_set(str(asi_path), threshold=0.99)
+                 self.trainer.prune_active_set(str(asi_path), threshold=pruning_thresh)
 
         new_potential = self.trainer.train(
             dataset_path=dataset_path,

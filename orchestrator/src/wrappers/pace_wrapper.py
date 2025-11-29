@@ -10,14 +10,15 @@ class PaceWorker(DockerWrapper):
 
     def train(self, config_filename: str, meta_config_filename: str, dataset_filename: str,
               initial_potential: Optional[str] = None, potential_yaml: Optional[str] = None,
-              asi: Optional[str] = None, iteration: int = 0) -> str:
+              asi: Optional[str] = None, iteration: int = 0, output_filename: str = "output_potential.yace") -> str:
         """Run Pacemaker training."""
         cmd = [
             "python", "/app/src/main.py", "train",
             "--config", f"{self.container_data_dir}/{config_filename}",
             "--meta-config", f"{self.container_data_dir}/{meta_config_filename}",
             "--dataset", f"{self.container_data_dir}/{dataset_filename}",
-            "--iteration", str(iteration)
+            "--iteration", str(iteration),
+            "--output_potential", f"{self.container_data_dir}/{output_filename}"
         ]
 
         if initial_potential:
@@ -30,7 +31,7 @@ class PaceWorker(DockerWrapper):
             cmd.extend(["--asi", f"{self.container_data_dir}/{asi}"])
 
         self.run(cmd, gpu=True)
-        return "output_potential.yace"
+        return output_filename
 
     def sample(self, config_filename: str, meta_config_filename: str,
                candidates_filename: str, n_samples: int, output_filename: str) -> None:
