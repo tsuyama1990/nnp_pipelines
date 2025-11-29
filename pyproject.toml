@@ -11,7 +11,7 @@ dependencies = [
     "pandas",
     "scipy",
     "lammps",
-    "PyYAML",
+    "pyyaml",
     "mace-torch",
     "pyxtal",
     "scikit-learn",
