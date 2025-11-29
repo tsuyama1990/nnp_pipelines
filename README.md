@@ -55,7 +55,14 @@ This project follows a **Micro-kernel Architecture**:
 
     *   **Structure Generation:** You can configure `gen_worker` to use strategies like `random_symmetry` (PyXtal) to explore new structures. See `workers/gen_worker/README.md` for details.
 
-2.  **Run the Orchestrator:**
+2.  **Setup Experiment:**
+    Run the setup script to initialize the experiment structure and generate configuration files.
+    ```bash
+    uv run setup_experiment.py
+    ```
+    This will create an `experiment_<name>` directory with all necessary configurations and a `run_pipeline.sh` script.
+
+3.  **Run the Orchestrator:**
     ```bash
     uv run orchestrator/main.py
     ```
@@ -70,8 +77,10 @@ This project follows a **Micro-kernel Architecture**:
 ## Directory Structure
 
 *   `orchestrator/`: Python code for the control logic.
+    *   `src/setup/`: Modules for experiment initialization.
     *   `src/wrappers/`: Docker wrappers that construct CLI commands for workers.
     *   `src/services/`: Business logic for MD, KMC, and Active Learning.
+    *   `src/utils/`: Utility classes, including parallel execution helpers.
 *   `workers/`: Source code and Dockerfiles for computational workers.
     *   `dft_worker/`: Quantum Espresso wrapper.
     *   `gen_worker/`: MACE structure generation and PyXtal integration.

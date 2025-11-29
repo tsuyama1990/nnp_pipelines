@@ -1,14 +1,15 @@
 import logging
 import random
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 from ase import Atoms
 from ase.io import read
+from functools import partial
 
 from shared.core.interfaces import MDEngine
 from shared.core.enums import SimulationState
 from shared.core.config import Config
+from orchestrator.src.utils.parallel_executor import ParallelExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class MDService:
     def __init__(self, md_engine: MDEngine, config: Config):
         self.md_engine = md_engine
         self.config = config
+        self.executor = ParallelExecutor(max_workers=config.md_params.n_md_walkers)
 
     def _get_md_conditions(self, iteration: int) -> Dict[str, float]:
         """Get Temperature and Pressure for the current iteration based on schedule."""
@@ -76,67 +78,67 @@ class MDService:
         logger.info("Running MD (Parallel Walkers)...")
 
         n_walkers = self.config.md_params.n_md_walkers
-        futures = []
         uncertain_structures_buffer = []
         any_uncertain = False
         any_failed = False
 
-        with ProcessPoolExecutor(max_workers=n_walkers) as executor:
-            for i in range(n_walkers):
-                conditions = self._get_md_conditions(iteration)
-                seed = random.randint(0, 1000000)
-                logger.info(f"Walker {i}: Temp={conditions['temperature']:.1f}, Press={conditions['pressure']:.1f}, Seed={seed}")
+        task_creators = []
 
-                futures.append(executor.submit(
-                    _run_md_task,
-                    self.md_engine,
-                    str(potential_path),
-                    self.config.md_params.n_steps,
-                    self.config.al_params.gamma_threshold,
-                    input_structure_path,
-                    is_restart,
-                    conditions['temperature'],
-                    conditions['pressure'],
-                    seed
-                ))
+        for i in range(n_walkers):
+            conditions = self._get_md_conditions(iteration)
+            seed = random.randint(0, 1000000)
+            logger.info(f"Walker {i}: Temp={conditions['temperature']:.1f}, Press={conditions['pressure']:.1f}, Seed={seed}")
 
-            for future in as_completed(futures):
-                state_res, dump_path = future.result()
+            task_creators.append(partial(
+                _run_md_task,
+                self.md_engine,
+                str(potential_path),
+                self.config.md_params.n_steps,
+                self.config.al_params.gamma_threshold,
+                input_structure_path,
+                is_restart,
+                conditions['temperature'],
+                conditions['pressure'],
+                seed
+            ))
 
-                if state_res == SimulationState.FAILED:
-                    any_failed = True
-                    continue
+        results = self.executor.submit_tasks(task_creators)
 
-                if dump_path and dump_path.exists():
-                    try:
-                        atoms_list = read(dump_path, index=":", format="lammps-dump-text")
-                        max_gamma_observed = 0.0
-                        uncertain_frames = []
+        for state_res, dump_path in results:
+            if state_res == SimulationState.FAILED:
+                any_failed = True
+                continue
 
-                        for at in atoms_list:
-                            gammas = None
-                            if 'f_2' in at.arrays:
-                                gammas = at.arrays['f_2']
-                            elif 'c_max_gamma' in at.arrays:
-                                gammas = at.arrays['c_max_gamma']
+            if dump_path and dump_path.exists():
+                try:
+                    atoms_list = read(dump_path, index=":", format="lammps-dump-text")
+                    max_gamma_observed = 0.0
+                    uncertain_frames = []
 
-                            if gammas is not None:
-                                current_max = gammas.max()
-                                max_gamma_observed = max(max_gamma_observed, current_max)
-                                if current_max > self.config.al_params.gamma_threshold:
-                                    uncertain_frames.append(at)
+                    for at in atoms_list:
+                        gammas = None
+                        if 'f_2' in at.arrays:
+                            gammas = at.arrays['f_2']
+                        elif 'c_max_gamma' in at.arrays:
+                            gammas = at.arrays['c_max_gamma']
 
-                        logger.info(f"Walker max gamma: {max_gamma_observed}")
+                        if gammas is not None:
+                            current_max = gammas.max()
+                            max_gamma_observed = max(max_gamma_observed, current_max)
+                            if current_max > self.config.al_params.gamma_threshold:
+                                uncertain_frames.append(at)
 
-                        if max_gamma_observed > self.config.al_params.gamma_threshold:
-                            any_uncertain = True
-                            if uncertain_frames:
-                                uncertain_structures_buffer.append(uncertain_frames[0])
-                            else:
-                                uncertain_structures_buffer.append(atoms_list[-1])
+                    logger.info(f"Walker max gamma: {max_gamma_observed}")
 
-                    except Exception as e:
-                        logger.warning(f"Failed to parse dump file {dump_path}: {e}")
+                    if max_gamma_observed > self.config.al_params.gamma_threshold:
+                        any_uncertain = True
+                        if uncertain_frames:
+                            uncertain_structures_buffer.append(uncertain_frames[0])
+                        else:
+                            uncertain_structures_buffer.append(atoms_list[-1])
+
+                except Exception as e:
+                    logger.warning(f"Failed to parse dump file {dump_path}: {e}")
 
         success = not any_failed # Simplified success check
         return success, uncertain_structures_buffer, any_failed
