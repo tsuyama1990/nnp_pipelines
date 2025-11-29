@@ -2,15 +2,15 @@ import os
 import shutil
 import tempfile
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional, Any
 from ase import Atoms
-from ase.io import write
+from ase.io import read, write
 
 from shared.core.interfaces import Sampler, StructureGenerator, Labeler, Trainer, Validator
 from shared.core.config import Config
 from shared.autostructure.deformation import SystematicDeformationGenerator
+from orchestrator.src.utils.parallel_executor import ParallelExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -52,23 +52,17 @@ class ActiveLearningService:
         self.validator = validator
         self.config = config
         self.max_workers = config.al_params.num_parallel_labeling
+        self.executor = ParallelExecutor(max_workers=self.max_workers)
 
     def _label_clusters_parallel(self, clusters: List[Atoms]) -> List[Atoms]:
         """Label clusters in parallel."""
-        labeled_results = []
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_cluster = {
-                executor.submit(_run_labeling_task, self.labeler, c): c
-                for c in clusters
-            }
-            for future in as_completed(future_to_cluster):
-                try:
-                    result = future.result()
-                    if result is not None:
-                        labeled_results.append(result)
-                except Exception as e:
-                    logger.error(f"Parallel labeling execution failed: {e}")
-        return labeled_results
+        # Note: In _run_labeling_task, the labeler is the first argument, and structure is second.
+        # execute(task, items, *args) passes item as first arg.
+        # So we need to wrap the task or adjust arguments.
+        # _run_labeling_task(labeler, structure)
+        # We want: task(structure) -> _run_labeling_task(labeler, structure)
+
+        return self.executor.execute(lambda s: _run_labeling_task(self.labeler, s), clusters)
 
     def ensure_chemical_symbols(self, atoms: Atoms):
         if 'type' in atoms.arrays:
