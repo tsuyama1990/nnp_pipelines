@@ -75,11 +75,13 @@ def main():
 
     # 3. Mapping Logic
 
+    # configs/config_meta.yaml
+    save_yaml(meta_config, configs_dir / "config_meta.yaml")
+
     # configs/core.yaml
     core_config = {
         "experiment": root_config.get("experiment", {}),
         "constants": constant_config if constant_config else {},
-        "meta": meta_config,
         "global_physics": {
             "elements": root_config.get("md_params", {}).get("elements", []),
             "masses": root_config.get("md_params", {}).get("masses", {})
@@ -206,7 +208,7 @@ echo "Step 4: DFT Labeling"
 # docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data dft_worker:latest \\
 #     python /app/src/main.py \\
 #     --config $CONFIGS_DIR/04_dft.yaml \\
-#     --meta-config $CONFIGS_DIR/core.yaml \\
+#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --structure $DATA_DIR/03_selected_structures.xyz \\
 #     --output $DATA_DIR/04_labeled_dataset.xyz
 
@@ -217,6 +219,7 @@ echo "Step 5: Training"
 # docker run --rm --gpus all -v $ROOT_DIR:/app -v $DATA_DIR:/data pace_worker:latest \\
 #     python /app/src/main.py train \\
 #     --config $CONFIGS_DIR/05_training.yaml \\
+#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --dataset $DATA_DIR/04_labeled_dataset.xyz \\
 #     --iteration 1
 
@@ -227,6 +230,7 @@ echo "Step 6: Production MD"
 # docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data lammps_worker:latest \\
 #     python /app/src/main.py md \\
 #     --config $CONFIGS_DIR/06_production.yaml \\
+#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --potential $DATA_DIR/potential.yace \\
 #     --structure $DATA_DIR/initial_state.xyz \\
 #     --steps 10000
@@ -239,6 +243,7 @@ echo "Step 7: Active Learning"
 # docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data lammps_worker:latest \\
 #     python /app/src/main.py md \\
 #     --config $CONFIGS_DIR/07_active_learning.yaml \\
+#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --potential $DATA_DIR/potential.yace \\
 #     --gamma 0.1
 
