@@ -9,9 +9,10 @@ import numpy as np
 class LAMMPSInputGenerator:
     """Responsible for generating LAMMPS input scripts."""
 
-    def __init__(self, lj_params: dict, md_params: dict):
+    def __init__(self, lj_params: dict, md_params: dict, delta_learning_mode: bool = True):
         self.lj_params = lj_params
         self.md_params = md_params
+        self.delta_learning_mode = delta_learning_mode
 
     def generate(
         self,
@@ -129,27 +130,25 @@ class LAMMPSInputGenerator:
 
         # Pair style
         if potential_path and potential_path.lower() != "none":
-            lines.append(f"pair_style hybrid/overlay pace/extrapolation lj/cut {rcut}")
-            lines.append(f"pair_coeff * * pace/extrapolation {potential_path} {element_map}")
-            # If we are using hybrid/overlay, we still need to specify LJ coeffs.
-            # But wait, usually overlay is for Delta Learning, where we add LJ to ACE/PACE?
-            # Or PACE already includes everything?
-            # "The pipeline currently uses ... ShiftedLennardJones ... and LAMMPS generation ... This is physically inaccurate ... creates a poor baseline for Delta Learning."
-            # So yes, we need to add LJ baseline.
-
-            # For hybrid/overlay, we need to specify pair coefficients for lj/cut as well.
-            self._write_lj_coeffs(lines, elements, epsilon, sigma, is_hybrid=True)
-
+            if self.delta_learning_mode:
+                lines.append(f"pair_style hybrid/overlay pace/extrapolation lj/cut {rcut}")
+                lines.append(f"pair_coeff * * pace/extrapolation {potential_path} {element_map}")
+                self._write_lj_coeffs(lines, elements, epsilon, sigma, is_hybrid=True)
+            else:
+                lines.append("pair_style pace/extrapolation")
+                lines.append(f"pair_coeff * * {potential_path} {element_map}")
         else:
             # Pure LJ mode (Seed Generation)
             lines.append(f"pair_style lj/cut {rcut}")
             self._write_lj_coeffs(lines, elements, epsilon, sigma, is_hybrid=False)
 
         # Enforce consistency with Python side ShiftedLennardJones
-        if shift_energy:
-            lines.append("pair_modify shift yes")
-        else:
-            lines.append("pair_modify shift no")
+        # Only apply shift if LJ is being used (Delta Learning ON or Pure LJ)
+        if (potential_path is None or potential_path.lower() == "none") or self.delta_learning_mode:
+            if shift_energy:
+                lines.append("pair_modify shift yes")
+            else:
+                lines.append("pair_modify shift no")
 
         lines.append("neighbor 1.0 bin")
         lines.append("neigh_modify delay 0 every 1 check yes")
