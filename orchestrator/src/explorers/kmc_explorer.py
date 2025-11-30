@@ -25,17 +25,6 @@ class KMCExplorer(BaseExplorer):
                 iteration: int,
                 **kwargs) -> ExplorationResult:
 
-        # KMC usually starts from a previous simulation state (e.g. restart.chk or dump)
-        # The Orchestrator logic for KMC selection was:
-        # 1. Select restart.chk.*
-        # 2. Select dump.lammpstrj.{seed}
-        # 3. Read structure
-        # 4. Run KMC
-
-        # If `current_structure` is passed, we should use it.
-        # However, the previous MD step might have produced multiple outputs.
-        # If this Explorer is run standalone, `current_structure` is the start.
-
         work_dir = Path.cwd()
 
         # Check if current_structure is valid
@@ -43,14 +32,6 @@ class KMCExplorer(BaseExplorer):
         if not p.exists():
             return ExplorationResult(status=ExplorationStatus.FAILED, metadata={"error": "Structure not found"})
 
-        # If it's a restart.chk file, KMC Service expects Atoms object.
-        # We need to read the atoms.
-        # But wait, KMCService.run_step takes `initial_atoms: Atoms`.
-
-        # If `current_structure` points to a restart file, we can't easily read it with ASE usually unless it's a supported format.
-        # The Orchestrator used `dump.lammpstrj.{seed}` corresponding to the restart file.
-
-        # Let's assume `current_structure` passed here is readable by ASE (e.g. data or dump or traj).
         try:
             kmc_input_atoms = read(current_structure, index=-1, format="lammps-dump-text" if "lammpstrj" in str(current_structure) else None)
         except Exception as e:
@@ -71,19 +52,26 @@ class KMCExplorer(BaseExplorer):
             return ExplorationResult(
                 status=ExplorationStatus.SUCCESS,
                 final_structure=str(next_input_file.resolve()),
-                metadata={"is_restart": False}
+                metadata={"is_restart": False, "barrier": kmc_result.metadata.get("barrier")}
             )
 
         elif kmc_result.status == KMCStatus.UNCERTAIN:
+             logger.info("KMC Explorer encountered uncertain Transition State candidate.")
+             # Epic 6: TS Structure Rescue
+             # The KMC engine returns the saddle point (or uncertain state) in result.structure
+             # We pass this up as 'uncertain_structures'.
+             # The orchestrator's loop (ActiveLearningOrchestrator) should pick this up
+             # and call ALService.trigger_al() on it.
              return ExplorationResult(
                 status=ExplorationStatus.UNCERTAIN,
-                uncertain_structures=[kmc_result.structure]
+                uncertain_structures=[kmc_result.structure],
+                metadata={"reason": kmc_result.metadata.get("reason", "Unknown")}
             )
 
         elif kmc_result.status == KMCStatus.NO_EVENT:
             return ExplorationResult(
                 status=ExplorationStatus.NO_EVENT,
-                final_structure=current_structure, # Stay where we are?
+                final_structure=current_structure,
                 metadata={"is_restart": True}
             )
 

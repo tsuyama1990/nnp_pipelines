@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import logging
+import json
 from pathlib import Path
 from typing import List, Optional, Any
 from ase import Atoms
@@ -11,6 +12,8 @@ from shared.core.interfaces import Sampler, StructureGenerator, Labeler, Trainer
 from shared.core.config import Config
 from shared.autostructure.deformation import SystematicDeformationGenerator
 from orchestrator.src.utils.parallel_executor import ParallelExecutor
+# MDService injection for Epic 1
+from orchestrator.src.services.md_service import MDService
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,8 @@ class ActiveLearningService:
         labeler: Labeler,
         trainer: Trainer,
         validator: Validator,
-        config: Config
+        config: Config,
+        md_service: Optional[MDService] = None
     ):
         self.sampler = sampler
         self.generator = generator
@@ -51,17 +55,16 @@ class ActiveLearningService:
         self.trainer = trainer
         self.validator = validator
         self.config = config
+        self.md_service = md_service
         self.max_workers = config.al_params.num_parallel_labeling
         self.executor = ParallelExecutor(max_workers=self.max_workers)
 
+        # Setup debug dump directory
+        self.debug_dump_dir = Path("debug_dump")
+        self.debug_dump_dir.mkdir(exist_ok=True)
+
     def _label_clusters_parallel(self, clusters: List[Atoms]) -> List[Atoms]:
         """Label clusters in parallel."""
-        # Note: In _run_labeling_task, the labeler is the first argument, and structure is second.
-        # execute(task, items, *args) passes item as first arg.
-        # So we need to wrap the task or adjust arguments.
-        # _run_labeling_task(labeler, structure)
-        # We want: task(structure) -> _run_labeling_task(labeler, structure)
-
         return self.executor.execute(lambda s: _run_labeling_task(self.labeler, s), clusters)
 
     def ensure_chemical_symbols(self, atoms: Atoms):
@@ -75,6 +78,35 @@ class ActiveLearningService:
                  else:
                      symbols.append("X")
              atoms.set_chemical_symbols(symbols)
+
+    def _dump_artifact(self, atoms: Atoms, context: str, error: Exception):
+        """Dump failed structure and context for debugging."""
+        try:
+            import datetime
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = self.debug_dump_dir / f"fail_{context}_{ts}.xyz"
+            write(filename, atoms)
+            meta_file = self.debug_dump_dir / f"fail_{context}_{ts}.json"
+            with open(meta_file, 'w') as f:
+                json.dump({"error": str(error), "context": context}, f)
+            logger.info(f"Dumped failure artifact to {filename}")
+        except Exception as e:
+            logger.warning(f"Failed to dump artifact: {e}")
+
+    def _rescue_unstable_structure(self, atoms: Atoms, potential_path: Path) -> Optional[Atoms]:
+        """Rescue high-gamma structure using short MD via MDService."""
+        if not self.md_service:
+            logger.warning("MDService not injected. Cannot run rescue MD.")
+            return None
+
+        logger.info("Attempting Rescue MD for unstable structure...")
+        try:
+            rescued_atoms = self.md_service.run_rescue(atoms, str(potential_path))
+            return rescued_atoms
+        except Exception as e:
+            logger.warning(f"Rescue MD failed: {e}")
+            self._dump_artifact(atoms, "rescue_md_failed", e)
+            return None
 
     def trigger_al(self,
                    uncertain_structures: List[Atoms],
@@ -92,8 +124,8 @@ class ActiveLearningService:
 
         clusters_to_label = []
         for atoms in uncertain_structures:
-            temp_dump = work_dir / "temp_uncertain.lammpstrj"
-            write(temp_dump, atoms, format="lammps-dump-text")
+            temp_dump = work_dir / "temp_uncertain.xyz"
+            write(temp_dump, atoms, format="xyz")
 
             sample_kwargs = {
                 "structures": [atoms],
@@ -117,22 +149,33 @@ class ActiveLearningService:
 
                 if max_gamma > self.config.al_params.gamma_upper_bound:
                     logger.warning(f"Gamma {max_gamma} exceeds limit. Attempting rescue.")
-                    if hasattr(self.generator, 'pre_optimizer') and self.generator.pre_optimizer:
-                         try:
-                             s_atoms = self.generator.pre_optimizer.run_pre_optimization(s_atoms)
-                             logger.info("Rescue successful.")
-                         except Exception as exc:
-                             logger.warning(f"Rescue failed: {exc}. Discarding candidate.")
-                             continue
+
+                    rescued = self._rescue_unstable_structure(s_atoms, potential_path)
+
+                    if rescued:
+                         logger.info("Rescue successful. Using rescued structure.")
+                         s_atoms = rescued
                     else:
-                        logger.warning("No Pre-Optimizer available. Discarding candidate.")
-                        continue
+                        # Fallback to PreOptimizer if exists
+                        if hasattr(self.generator, 'pre_optimizer') and self.generator.pre_optimizer:
+                             try:
+                                 s_atoms = self.generator.pre_optimizer.run_pre_optimization(s_atoms)
+                                 logger.info("PreOptimizer Rescue successful.")
+                             except Exception as exc:
+                                 logger.warning(f"PreOptimizer Rescue failed: {exc}. Discarding candidate.")
+                                 self._dump_artifact(s_atoms, "preopt_rescue_failed", exc)
+                                 continue
+                        else:
+                            logger.warning("No Rescue mechanism available. Discarding candidate.")
+                            self._dump_artifact(s_atoms, "gamma_limit_exceeded_no_rescue", Exception(f"Gamma {max_gamma}"))
+                            continue
 
                 try:
                     cell = self.generator.generate_cell(s_atoms, center_id, str(potential_path))
                     clusters_to_label.append(cell)
                 except Exception as e:
                     logger.warning(f"Generation failed for cluster {center_id}: {e}")
+                    self._dump_artifact(s_atoms, f"generation_failed_cluster_{center_id}", e)
 
         if not clusters_to_label:
             logger.error("No clusters generated.")
