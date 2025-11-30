@@ -38,13 +38,19 @@ def run_small_cell(args, config):
     elements = config.md_params.elements
     ratio = {el: 1.0 for el in elements}
 
+    delta_mode = getattr(config.ace_model, "delta_learning_mode", True)
+    # Extract LJ params as dict
+    lj_dict = asdict(config.lj_params)
+
     generator = SmallCellGenerator(
         r_core=config.al_params.r_core,
         box_size=config.al_params.box_size,
         stoichiometric_ratio=ratio,
         lammps_cmd=config.meta.lammps_command,
         min_bond_distance=config.al_params.min_bond_distance,
-        stoichiometry_tolerance=config.al_params.stoichiometry_tolerance
+        stoichiometry_tolerance=config.al_params.stoichiometry_tolerance,
+        delta_learning_mode=delta_mode,
+        lj_params=lj_dict
     )
 
     small_atoms = generator.generate_cell(
@@ -64,11 +70,14 @@ def run_kmc(args, config):
     # For now, pass empty dict or load from default path if available.
     e0_dict = {} # Simplified
 
+    delta_mode = getattr(config.ace_model, "delta_learning_mode", True)
+
     engine = OffLatticeKMCEngine(
         kmc_params=config.kmc_params,
         al_params=config.al_params,
         lj_params=config.lj_params,
-        e0_dict=e0_dict
+        e0_dict=e0_dict,
+        delta_learning_mode=delta_mode
     )
 
     initial_atoms = read(args.structure)

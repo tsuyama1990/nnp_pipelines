@@ -14,6 +14,7 @@ from shared.autostructure.deformation import SystematicDeformationGenerator
 from orchestrator.src.utils.parallel_executor import ParallelExecutor
 # MDService injection for Epic 1
 from orchestrator.src.services.md_service import MDService
+from orchestrator.src.services.baseline_optimizer import BaselineOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +188,66 @@ class ActiveLearningService:
         if not labeled_clusters:
             logger.error("No clusters labeled successfully.")
             return None
+
+        # Epic 4: Baseline Potential Auto-Optimization
+        if self.config.ace_model.delta_learning_mode:
+            logger.info("Delta Learning Mode: ON. Attempting to optimize LJ baseline.")
+            try:
+                # We need elements. Can get from config.md_params.elements
+                elements = self.config.md_params.elements
+
+                # Check if we have enough data? BaselineOptimizer handles data filtering.
+                optimizer = BaselineOptimizer(elements, self.config.lj_params)
+
+                # Run optimization on newly labeled clusters
+                # Note: labeled_clusters contain the new DFT data
+                opt_res = optimizer.optimize(labeled_clusters)
+
+                if opt_res:
+                    logger.info(f"Baseline Optimization Result: {opt_res}")
+
+                    # Update Config with new params
+                    # config.lj_params is a dataclass, but we need to verify if we can update it in place
+                    # or if we need to update dictionaries that workers read.
+                    # Workers typically read config.lj_params.
+
+                    # NOTE: LJParams dataclass usually holds scalar epsilon/sigma.
+                    # If optimization returns per-species, we might have a mismatch
+                    # unless we update logic to support per-species or we average them.
+                    #
+                    # The BaselineOptimizer returns "epsilon": {el: val}, "sigma": {el: val}.
+                    # But config.lj_params is simple scalars in current implementation (see config.py LJParams).
+                    # The prompt says "Auto-Optimization... automatically fit LJ parameters".
+                    # If config.lj_params is updated, subsequent steps (like KMC) which read config.lj_params
+                    # will pick up the new values.
+                    #
+                    # Issue: LJParams dataclass fields are floats, not dicts.
+                    # If we simply overwrite them, it works for scalars.
+                    # If we want species specific, we must refactor config.
+                    # FOR NOW: We take the average or the first element if mono-atomic?
+                    # OR, better: We assume config.lj_params can hold dicts?
+                    # Checked config.py:
+                    # @dataclass class LJParams: epsilon: float, sigma: float ...
+                    # It expects floats.
+
+                    # Implementation Decision:
+                    # Update the scalars with the mean of the optimized values.
+                    # This is imperfect for alloys but fits the current architectural constraint
+                    # without refactoring the whole config system.
+
+                    eps_vals = list(opt_res['epsilon'].values())
+                    sig_vals = list(opt_res['sigma'].values())
+
+                    avg_eps = sum(eps_vals) / len(eps_vals)
+                    avg_sig = sum(sig_vals) / len(sig_vals)
+
+                    self.config.lj_params.epsilon = float(avg_eps)
+                    self.config.lj_params.sigma = float(avg_sig)
+
+                    logger.info(f"Updated Global LJ Params: epsilon={avg_eps:.4f}, sigma={avg_sig:.4f}")
+
+            except Exception as e:
+                logger.warning(f"Baseline optimization failed: {e}. Continuing with previous baseline.")
 
         logger.info("Training new potential...")
         dataset_path = self.trainer.prepare_dataset(labeled_clusters)
