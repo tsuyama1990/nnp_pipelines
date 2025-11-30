@@ -1,15 +1,19 @@
 import argparse
 import yaml
 import sys
+import logging
 from pathlib import Path
 from ase.io import read, write
 from scenarios import ScenarioFactory
 from filter import MACEFilter
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def run_generate(args):
     config_path = Path(args.config)
     if not config_path.exists():
-        print(f"Error: Config file {config_path} not found.")
+        logger.error(f"Config file {config_path} not found.")
         sys.exit(1)
 
     with open(config_path, "r") as f:
@@ -40,22 +44,22 @@ def run_generate(args):
             generator = ScenarioFactory.create(scen_conf)
             structures = generator.generate()
             all_structures.extend(structures)
-            print(f"Generated {len(structures)} structures for scenario {scen_conf.get('type')}")
+            logger.info(f"Generated {len(structures)} structures for scenario {scen_conf.get('type')}")
         except Exception as e:
-            print(f"Failed to generate for scenario {scen_conf}: {e}")
+            logger.error(f"Failed to generate for scenario {scen_conf}: {e}", exc_info=True)
 
     write(args.output, all_structures)
-    print(f"Wrote {len(all_structures)} structures to {args.output}")
+    logger.info(f"Wrote {len(all_structures)} structures to {args.output}")
 
 def run_filter(args):
     # args: input, output, model, fmax
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"Error: Input file {input_path} not found.")
+        logger.error(f"Input file {input_path} not found.")
         sys.exit(1)
 
     structures = read(input_path, index=":")
-    print(f"Filtering {len(structures)} structures with MACE (model={args.model}, fmax={args.fmax})")
+    logger.info(f"Filtering {len(structures)} structures with MACE (model={args.model}, fmax={args.fmax})")
 
     mace_filter = MACEFilter(
         model_size=args.model,
@@ -65,7 +69,7 @@ def run_filter(args):
     valid_structures = mace_filter.filter(structures)
 
     write(args.output, valid_structures)
-    print(f"Wrote {len(valid_structures)} filtered structures to {args.output}")
+    logger.info(f"Wrote {len(valid_structures)} filtered structures to {args.output}")
 
 def main():
     parser = argparse.ArgumentParser(description="Scenario Generation Worker")

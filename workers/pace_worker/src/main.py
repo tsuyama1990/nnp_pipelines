@@ -26,7 +26,7 @@ def run_train(args, config, meta_config):
         asi_path=args.asi,
         iteration=args.iteration
     )
-    print(f"Output Potential: {output_pot}")
+    logger.info(f"Output Potential: {output_pot}")
 
 def run_sample(args, config):
     candidates = read(args.candidates, index=":")
@@ -38,14 +38,14 @@ def run_sample(args, config):
     selected = sampler.sample(candidates, n_samples=args.n_samples)
     selected_atoms = [s[0] for s in selected]
     write(args.output, selected_atoms)
-    print(f"Selected {len(selected_atoms)} structures written to {args.output}")
+    logger.info(f"Selected {len(selected_atoms)} structures written to {args.output}")
 
 def run_direct_sample(args):
     structures = read(args.input, index=":")
     sampler = DirectSampler(n_clusters=args.n_clusters)
     selected = sampler.sample(structures)
     write(args.output, selected)
-    print(f"Direct Sampled {len(selected)} structures written to {args.output}")
+    logger.info(f"Direct Sampled {len(selected)} structures written to {args.output}")
 
 def run_validate(args):
     # args: potential, output (json)
@@ -53,7 +53,7 @@ def run_validate(args):
     metrics = validator.validate(args.potential)
     with open(args.output, "w") as f:
         json.dump(metrics, f)
-    print(f"Validation metrics written to {args.output}")
+    logger.info(f"Validation metrics written to {args.output}")
 
 def main():
     parser = argparse.ArgumentParser(description="Pacemaker Worker")
@@ -106,7 +106,7 @@ def main():
                 run_sample(args, config)
 
     except Exception as e:
-        logger.error(f"Worker failed: {e}")
+        logger.error(f"Worker failed: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

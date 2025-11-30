@@ -1,8 +1,11 @@
 import numpy as np
 from typing import Dict, Set, Optional
 from ase import Atoms
+import logging
 from ase.calculators.calculator import Calculator
 from ase.optimize import BFGS
+
+logger = logging.getLogger(__name__)
 
 try:
     from mace.calculators import mace_mp
@@ -51,7 +54,7 @@ class PreOptimizer:
         try:
             return mace_mp(model="medium", device="cpu", default_dtype="float64")
         except Exception as e:
-            print(f"Warning: Failed to load MACE 'medium' model ({e}). Falling back to 'small'.")
+            logger.warning(f"Failed to load MACE 'medium' model ({e}). Falling back to 'small'.")
             return mace_mp(model="small", device="cpu", default_dtype="float64")
 
     def run_pre_optimization(self, atoms: Atoms) -> Atoms:

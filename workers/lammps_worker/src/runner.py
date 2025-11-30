@@ -4,6 +4,7 @@ Handles execution of LAMMPS simulations.
 """
 
 import subprocess
+import logging
 from pathlib import Path
 
 from shared.core.interfaces import MDEngine
@@ -58,7 +59,7 @@ class LAMMPSRunner(MDEngine):
             with open("stdout.log", "w") as out, open("stderr.log", "w") as err:
                 result = subprocess.run(cmd_list, stdout=out, stderr=err)
         except Exception as e:
-            print(f"LAMMPS execution failed: {e}")
+            logging.error(f"LAMMPS execution failed: {e}", exc_info=True)
             return SimulationState.FAILED
 
         # Check log for halt condition

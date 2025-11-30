@@ -5,7 +5,7 @@ from ase import Atoms
 from ase.build import bulk, molecule
 from pymatgen.core import Structure, Lattice
 
-from src.autostructure import (
+from shared.autostructure import (
     AutoStructureBuilder,
     PreOptimizer,
     IonicGenerator,

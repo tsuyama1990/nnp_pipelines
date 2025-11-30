@@ -69,7 +69,6 @@ class MDService:
         the final structure.
         """
         import tempfile
-        import os
 
         logger.info("Running Rescue MD simulation...")
 

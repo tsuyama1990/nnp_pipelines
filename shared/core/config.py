@@ -42,7 +42,7 @@ def generate_default_lj_params(elements: List[str]) -> Dict[str, float]:
             "cutoff": float(round(2.5 * sigma, 3))
         }
     except Exception as e:
-        print(f"Warning: Could not auto-generate LJ params ({e}). Using safe defaults.")
+        logger.warning(f"Could not auto-generate LJ params ({e}). Using safe defaults.")
         return {"epsilon": 1.0, "sigma": 2.0, "cutoff": 5.0}
 
 @dataclass

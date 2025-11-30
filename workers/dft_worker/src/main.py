@@ -163,7 +163,7 @@ def main():
 
         for i, atoms in enumerate(all_atoms):
             try:
-                print(f"Labeling structure {i+1}/{len(all_atoms)}...")
+                logger.info(f"Labeling structure {i+1}/{len(all_atoms)}...")
                 elements = sorted(list(set(atoms.get_chemical_symbols())))
 
                 dft_configurator = DFTConfigurator(params=config.dft_params, meta=meta, type_dft_settings=dft_overrides)
@@ -189,24 +189,20 @@ def main():
                 if labeled:
                     labeled_structures.append(labeled)
                 else:
-                    print(f"Skipping structure {i+1} due to labeling failure.")
+                    logger.warning(f"Skipping structure {i+1} due to labeling failure.")
             except Exception as e:
-                print(f"Error labeling structure {i+1}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"Error labeling structure {i+1}: {e}", exc_info=True)
 
         if labeled_structures:
             write(args.output, labeled_structures)
-            print(f"Labeled {len(labeled_structures)} structures written to {args.output}")
+            logger.info(f"Labeled {len(labeled_structures)} structures written to {args.output}")
         else:
-            print("No structures labeled.")
+            logger.warning("No structures labeled.")
             if not labeled_structures and all_atoms:
                 sys.exit(1)
 
     except Exception as e:
-        print(f"DFT Worker failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"DFT Worker failed: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":
