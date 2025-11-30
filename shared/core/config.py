@@ -1,20 +1,20 @@
 """Configuration module for the ACE Active Carver project.
 
 This module defines the configuration data structures used throughout the application.
-It uses Python's standard dataclasses for definition and PyYAML for loading from files.
+It uses Pydantic for definition and PyYAML for loading from files.
 """
 
 import yaml
 import numpy as np
 import logging
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, List, Dict, Literal
 from ase.data import atomic_numbers, covalent_radii
-
-CrystalType = Literal["metallic", "ionic", "covalent", "random"]
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 logger = logging.getLogger(__name__)
+
+CrystalType = Literal["metallic", "ionic", "covalent", "random"]
 
 def generate_default_lj_params(elements: List[str]) -> Dict[str, float]:
     """
@@ -45,8 +45,7 @@ def generate_default_lj_params(elements: List[str]) -> Dict[str, float]:
         logger.warning(f"Could not auto-generate LJ params ({e}). Using safe defaults.")
         return {"epsilon": 1.0, "sigma": 2.0, "cutoff": 5.0}
 
-@dataclass
-class MetaConfig:
+class MetaConfig(BaseModel):
     """Environment-specific configuration."""
     dft: Dict[str, Any]
     lammps: Dict[str, Any]
@@ -68,42 +67,37 @@ class MetaConfig:
         return self.lammps.get("command", "lmp_serial")
 
 
-@dataclass
-class ExperimentConfig:
+class ExperimentConfig(BaseModel):
     """Experiment metadata and output settings."""
     name: str
     output_dir: Path
 
 
-@dataclass
-class ExplorationParams:
+class ExplorationParams(BaseModel):
     """Parameters for choosing the exploration strategy."""
     strategy: str = "hybrid"
 
 
-@dataclass
-class MDParams:
+class MDParams(BaseModel):
     """Parameters for Molecular Dynamics simulations."""
-    timestep: float
-    temperature: float
-    pressure: float
-    n_steps: int
-    elements: list[str]
+    timestep: float = Field(..., gt=0)
+    temperature: float = Field(..., gt=0)
+    pressure: float = Field(..., ge=0)
+    n_steps: int = Field(..., gt=0)
+    elements: List[str] = Field(..., min_length=1)
     initial_structure: str
-    masses: dict[str, float]
-    restart_freq: int = 1000
-    dump_freq: int = 1000
-    n_md_walkers: int = 1
-    # lammps_command removed, now in MetaConfig
+    masses: Dict[str, float]
+    restart_freq: int = Field(1000, gt=0)
+    dump_freq: int = Field(1000, gt=0)
+    n_md_walkers: int = Field(1, gt=0)
 
 
-@dataclass
-class ALParams:
+class ALParams(BaseModel):
     """Parameters for Active Learning strategy."""
     gamma_threshold: float
-    n_clusters: int
-    r_core: float
-    box_size: float
+    n_clusters: int = Field(..., gt=0)
+    r_core: float = Field(..., gt=0)
+    box_size: float = Field(..., gt=0)
     initial_potential: str
     potential_yaml_path: str
     initial_dataset_path: Optional[str] = None
@@ -117,21 +111,20 @@ class ALParams:
     gamma_upper_bound: float = 2.0
 
 
-@dataclass
-class KMCParams:
+class KMCParams(BaseModel):
     """Parameters for kMC simulations."""
     active: bool = False
-    temperature: float = 300.0
-    n_searches: int = 10
+    temperature: float = Field(300.0, gt=0)
+    n_searches: int = Field(10, gt=0)
     search_radius: float = 0.1
     dimer_fmax: float = 0.05
     check_interval: int = 5
     prefactor: float = 1e12
-    box_size: float = 12.0
+    box_size: float = Field(12.0, gt=0)
     buffer_width: float = 2.0
     n_workers: int = 4
     active_region_mode: str = "surface_and_species"
-    active_species: List[str] = field(default_factory=lambda: ["Co", "Ti", "O"])
+    active_species: List[str] = Field(default_factory=lambda: ["Co", "Ti", "O"])
     active_z_cutoff: float = 10.0
     move_type: str = "cluster"
     cluster_radius: float = 3.0
@@ -141,89 +134,66 @@ class KMCParams:
     cluster_connectivity_cutoff: float = 3.0
 
 
-@dataclass
-class DFTParams:
+class DFTParams(BaseModel):
     """Parameters for Density Functional Theory calculations."""
-    kpoint_density: float = 60.0
+    kpoint_density: float = Field(60.0, gt=0)
     auto_physics: bool = True
-    # command, pseudo_dir, sssp_json_path removed, now in MetaConfig
 
 
-@dataclass
-class LJParams:
+class LJParams(BaseModel):
     """Parameters for Lennard-Jones potential."""
-    epsilon: float
-    sigma: float
-    cutoff: float
+    epsilon: float = Field(..., gt=0)
+    sigma: float = Field(..., gt=0)
+    cutoff: float = Field(..., gt=0)
     shift_energy: bool = True
 
 
-@dataclass
-class PreOptimizationParams:
+class PreOptimizationParams(BaseModel):
     """Parameters for MACE pre-optimization."""
     enabled: bool = False
     model: str = "medium"
     fmax: float = 0.1
-    steps: int = 50
+    steps: int = Field(50, gt=0)
     device: str = "cuda"
 
-@dataclass
-class SeedGenerationParams:
+class SeedGenerationParams(BaseModel):
     """Parameters for the Seed Generation phase."""
     crystal_type: CrystalType = "random"
-    # Mapping 'types' from yaml to 'type_settings' here or rename field to 'types'
-    types: Dict[str, Any] = field(default_factory=dict)
-    n_random_structures: int = 100
-    exploration_temperatures: List[float] = field(default_factory=lambda: [300.0, 1000.0])
-    n_md_steps: int = 1000
-    n_samples_for_dft: int = 20
+    types: Dict[str, Any] = Field(default_factory=dict)
+    n_random_structures: int = Field(100, gt=0)
+    exploration_temperatures: List[float] = Field(default_factory=lambda: [300.0, 1000.0])
+    n_md_steps: int = Field(1000, gt=0)
+    n_samples_for_dft: int = Field(20, gt=0)
 
-@dataclass
-class GenerationParams:
+class GenerationParams(BaseModel):
     """Parameters for scenario-driven generation."""
-    pre_optimization: PreOptimizationParams = field(default_factory=PreOptimizationParams)
-    scenarios: List[Dict[str, Any]] = field(default_factory=list)
+    pre_optimization: PreOptimizationParams = Field(default_factory=PreOptimizationParams)
+    scenarios: List[Dict[str, Any]] = Field(default_factory=list)
     device: str = "cuda"
-    # Note: 'scenarios' is a list of dictionaries where each dict defines a specific generation task.
-    # Supported types include: 'interface', 'surface', 'defect', 'grain_boundary', 'random', 'random_symmetry'.
-    # Example for 'random_symmetry':
-    # {
-    #   "type": "random_symmetry",
-    #   "elements": ["Al", "Cu"],
-    #   "num_structures": 10,
-    #   "space_group_range": [1, 230],
-    #   "volume_factor": 1.0,
-    #   "composition": {"Al": 4, "Cu": 4}  # Optional
-    # }
 
 
-@dataclass
-class ACEModelParams:
+class ACEModelParams(BaseModel):
     """Parameters for Pacemaker potential model."""
-    pacemaker_config: Dict[str, Any] = field(default_factory=dict)
-    initial_potentials: List[str] = field(default_factory=list)
+    pacemaker_config: Dict[str, Any] = Field(default_factory=dict)
+    initial_potentials: List[str] = Field(default_factory=list)
     delta_learning_mode: bool = True
 
 
-@dataclass
-class TrainingParams:
+class TrainingParams(BaseModel):
     """Parameters for Active Learning Training strategy."""
     replay_ratio: float = 1.0
     global_dataset_path: str = "data/global_dataset.pckl"
-    # Pacemaker-specific params removed, moved to ACEModelParams.pacemaker_config
 
 
-@dataclass
-class ExplorationStage:
+class ExplorationStage(BaseModel):
     """Parameters for a single thermodynamic exploration stage."""
-    iter_start: int
-    iter_end: int
+    iter_start: int = Field(..., ge=0)
+    iter_end: int = Field(..., ge=0)
     temp: List[float]
     press: List[float]
 
 
-@dataclass
-class Config:
+class Config(BaseModel):
     """Main configuration class aggregating all parameter sections."""
     meta: MetaConfig
     experiment: ExperimentConfig
@@ -235,10 +205,10 @@ class Config:
     training_params: TrainingParams
     ace_model: ACEModelParams
     seed: int = 42
-    kmc_params: KMCParams = field(default_factory=KMCParams)
-    generation_params: GenerationParams = field(default_factory=GenerationParams)
-    seed_generation: SeedGenerationParams = field(default_factory=SeedGenerationParams)
-    exploration_schedule: List[ExplorationStage] = field(default_factory=list)
+    kmc_params: KMCParams = Field(default_factory=KMCParams)
+    generation_params: GenerationParams = Field(default_factory=GenerationParams)
+    seed_generation: SeedGenerationParams = Field(default_factory=SeedGenerationParams)
+    exploration_schedule: List[ExplorationStage] = Field(default_factory=list)
 
     @classmethod
     def load_meta(cls, path: Path) -> MetaConfig:
@@ -287,57 +257,36 @@ class Config:
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any], meta_config: MetaConfig) -> "Config":
         """Create a Config instance from a dictionary."""
-        gen_dict = config_dict.get("generation", {})
-        pre_opt_dict = gen_dict.get("pre_optimization", {})
+        # Preprocessing to match Pydantic structure
 
-        generation_params = GenerationParams(
-            pre_optimization=PreOptimizationParams(**pre_opt_dict),
-            scenarios=gen_dict.get("scenarios", [])
-        )
-
+        # Special handling for LJ Params generation if missing
         md_dict = config_dict.get("md_params", {})
-
-        seed_gen_dict = config_dict.get("seed_generation", {})
-
-        # Ensure 'types' key is preserved if present
-        if "types" in seed_gen_dict:
-             seed_gen_dict["types"] = seed_gen_dict["types"]
-
         lj_dict = config_dict.get("lj_params", {})
         if not lj_dict:
             elements = md_dict.get("elements", [])
             lj_dict = generate_default_lj_params(elements)
 
-        # DFT Params: Filter out environment paths if they still exist in dict (backwards compat)
+        # Special handling for DFT Params filtering
         dft_dict = config_dict.get("dft_params", {}).copy()
         allowed_dft_keys = {"kpoint_density", "auto_physics"}
         dft_dict = {k: v for k, v in dft_dict.items() if k in allowed_dft_keys}
 
+        # Construct the full dictionary for Pydantic
+
+        final_dict = config_dict.copy()
+        final_dict["meta"] = meta_config
+        final_dict["lj_params"] = lj_dict
+        final_dict["dft_params"] = dft_dict
+
+        # experiment config needs to be constructed as a dict or object
         exp_dict = config_dict.get("experiment", {})
+        final_dict["experiment"] = {
+            "name": exp_dict.get("name", "experiment"),
+            "output_dir": exp_dict.get("output_dir", "output")
+        }
 
-        ace_dict = config_dict.get("ace_model", {})
+        # Handle generation params mapping
+        if "generation" in config_dict:
+            final_dict["generation_params"] = config_dict["generation"]
 
-        # Parse exploration schedule
-        schedule_list = []
-        for stage in config_dict.get("exploration_schedule", []):
-            schedule_list.append(ExplorationStage(**stage))
-
-        return cls(
-            meta=meta_config,
-            experiment=ExperimentConfig(
-                name=exp_dict.get("name", "experiment"),
-                output_dir=Path(exp_dict.get("output_dir", "output"))
-            ),
-            exploration=ExplorationParams(**config_dict.get("exploration", {})),
-            md_params=MDParams(**md_dict),
-            al_params=ALParams(**config_dict.get("al_params", {})),
-            kmc_params=KMCParams(**config_dict.get("kmc_params", {})),
-            dft_params=DFTParams(**dft_dict),
-            lj_params=LJParams(**lj_dict),
-            training_params=TrainingParams(**config_dict.get("training_params", {})),
-            ace_model=ACEModelParams(**ace_dict),
-            generation_params=generation_params,
-            seed_generation=SeedGenerationParams(**seed_gen_dict),
-            exploration_schedule=schedule_list,
-            seed=config_dict.get("seed", 42)
-        )
+        return cls(**final_dict)
