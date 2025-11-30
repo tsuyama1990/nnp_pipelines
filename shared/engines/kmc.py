@@ -133,30 +133,8 @@ def _run_local_search(
     # Random is usually best for escaping minima.
     # But if we have some residual forces (not fully relaxed), we can use them.
 
-    # Implementation: Calculate forces. If magnitude is significant, use it as bias.
-    try:
-        forces = cluster.get_forces()
-        # Filter forces on active atoms
-        active_forces = forces[active_indices] if active_indices else forces
-
-        # Check max force
-        f_max = np.max(np.linalg.norm(active_forces, axis=1)) if len(active_forces) > 0 else 0.0
-
-        if f_max > 0.1: # Threshold to use gradient
-             # Normalize and use as bias
-             bias_direction = forces.copy()
-             # We only apply bias to active indices
-             # But `coherent_disp` is a single vector applied to all?
-             # No, loop below applies `coherent_disp + noise`.
-             # We want per-atom displacement?
-             pass
-    except:
-        pass
-
-    # Simplified Gradient-Guided: Just random for now as generic gradient logic requires careful tuning.
-    # The requirement said "Gradient-Guided...". I will implement a basic version.
-
-    coherent_disp = np.random.normal(0, kmc_params.search_radius, 3)
+    # Epic 1: Physics-Correct kMC Transition State Search
+    # Removed gradient-guided initialization. Using pure random displacement.
 
     # Identify free atoms (not fixed)
     constraints = search_atoms.constraints
@@ -170,28 +148,6 @@ def _run_local_search(
     if not target_indices:
         return KMCResult(status=KMCStatus.NO_EVENT, structure=cluster, metadata={"reason": "No active atoms in cluster"})
 
-    # Gradient bias vector
-    # If we want to move towards a reaction, we often move along the lowest curvature mode.
-    # Without Hessian, random is best.
-    # But if we want to follow the "force" to find where the system "wants" to go (e.g. if unstable):
-    # bias = force.
-
-    forces = search_atoms.get_forces()
-
-    for idx in target_indices:
-        noise = np.random.normal(0, kmc_params.search_radius * 0.2, 3)
-
-        # Epic 3: Gradient bias
-        # If force is significant, add component along force
-        f = forces[idx]
-        f_norm = np.linalg.norm(f)
-        if f_norm > 0.05:
-            # Normalize and scale by search radius
-            bias = (f / f_norm) * kmc_params.search_radius * 0.5
-            search_atoms.positions[idx] += coherent_disp + noise + bias
-        else:
-            search_atoms.positions[idx] += coherent_disp + noise
-
     dimer_control = DimerControl(
         logfile=None,
         eigenmode_method='displacement',
@@ -199,72 +155,85 @@ def _run_local_search(
         f_rot_max=1.0
     )
 
-    dimer_atoms = MinModeAtoms(search_atoms, dimer_control)
-    dimer_atoms.displace()
+    n_retries = 3
+    for attempt in range(n_retries):
+        # Reset positions to initial cluster state before applying displacement
+        search_atoms.positions = cluster.positions.copy()
 
-    # Fire optimization for finding saddle
-    opt = FIRE(dimer_atoms, logfile=None)
+        # Generate fresh random displacement
+        coherent_disp = np.random.normal(0, kmc_params.search_radius, 3)
 
-    converged = False
-    uncertain = False
-    max_steps = 1000
-    current_step = 0
-    max_gamma = 0.0
+        for idx in target_indices:
+            noise = np.random.normal(0, kmc_params.search_radius * 0.2, 3)
+            # Pure random displacement (Epic 1.1)
+            search_atoms.positions[idx] += coherent_disp + noise
 
-    while current_step < max_steps:
-        opt.run(steps=kmc_params.check_interval)
-        current_step += kmc_params.check_interval
+        # Initialize Dimer with random rotation (ensured by displace() on fresh MinModeAtoms)
+        dimer_atoms = MinModeAtoms(search_atoms, dimer_control)
+        dimer_atoms.displace()
 
-        if opt.converged():
-            converged = True
-            break
+        # Fire optimization for finding saddle
+        opt = FIRE(dimer_atoms, logfile=None)
 
-        # Uncertainty Check
-        try:
-            calc = search_atoms.calc
-            gamma_vals = None
-            if hasattr(calc, "calculators"): # SumCalculator
-                for subcalc in calc.calculators:
-                    if hasattr(subcalc, 'results') and 'gamma' in subcalc.results:
-                        gamma_vals = subcalc.results.get('gamma')
+        converged = False
+        uncertain = False
+        max_steps = 1000
+        current_step = 0
+        max_gamma = 0.0
+
+        while current_step < max_steps:
+            opt.run(steps=kmc_params.check_interval)
+            current_step += kmc_params.check_interval
+
+            if opt.converged():
+                converged = True
+                break
+
+            # Uncertainty Check
+            try:
+                calc = search_atoms.calc
+                gamma_vals = None
+                if hasattr(calc, "calculators"): # SumCalculator
+                    for subcalc in calc.calculators:
+                        if hasattr(subcalc, 'results') and 'gamma' in subcalc.results:
+                            gamma_vals = subcalc.results.get('gamma')
+                            break
+                elif hasattr(calc, "results"):
+                    gamma_vals = calc.results.get('gamma')
+
+                if gamma_vals is not None:
+                    max_gamma = np.max(gamma_vals)
+                    if max_gamma > al_params.gamma_threshold:
+                        uncertain = True
                         break
-            elif hasattr(calc, "results"):
-                gamma_vals = calc.results.get('gamma')
+            except Exception:
+                pass
 
-            if gamma_vals is not None:
-                # Epic 6: Local MaxGamma check?
-                # We check max gamma on active indices if possible, or global
-                # For safety, global max in the cluster is good enough
-                max_gamma = np.max(gamma_vals)
-                if max_gamma > al_params.gamma_threshold:
-                    uncertain = True
-                    break
-        except Exception:
-            pass
+        if uncertain:
+            return KMCResult(
+                status=KMCStatus.UNCERTAIN,
+                structure=search_atoms.copy(),
+                metadata={"reason": "High Gamma Saddle", "gamma": max_gamma}
+            )
 
-    if uncertain:
-        # Epic 6: Return the TS structure (search_atoms) for rescue
-        return KMCResult(
-            status=KMCStatus.UNCERTAIN,
-            structure=search_atoms.copy(),
-            metadata={"reason": "High Gamma Saddle", "gamma": max_gamma}
-        )
+        if converged:
+            product_atoms = search_atoms.copy()
+            _setup_calculator(product_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
 
-    if converged:
-        product_atoms = search_atoms.copy()
-        _setup_calculator(product_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
+            prod_opt = FIRE(product_atoms, logfile=None)
+            prod_opt.run(fmax=kmc_params.dimer_fmax, steps=500)
 
-        prod_opt = FIRE(product_atoms, logfile=None)
-        prod_opt.run(fmax=kmc_params.dimer_fmax, steps=500)
+            e_saddle = dimer_atoms.get_potential_energy()
+            e_initial = cluster.get_potential_energy()
+            barrier = e_saddle - e_initial
 
-        e_saddle = dimer_atoms.get_potential_energy()
-        e_initial = cluster.get_potential_energy()
-        barrier = e_saddle - e_initial
-
-        if barrier > 0.01:
-            displacement = product_atoms.positions - cluster.positions
-            # We return: barrier, displacement array (full cluster size), None (index map handled by caller)
-            return (barrier, displacement, None)
+            # Epic 1.2: Retry if barrier is too small (collapsed to minimum)
+            if barrier > 0.01:
+                displacement = product_atoms.positions - cluster.positions
+                return (barrier, displacement, None)
+            else:
+                # Barrier too small, likely found the original minimum. Retry with new random direction.
+                pass
 
     return KMCResult(status=KMCStatus.NO_EVENT, structure=cluster)
 

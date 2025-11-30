@@ -72,18 +72,23 @@ class PymatgenHeuristics:
     def _estimate_electronic_type(cls, atoms: Atoms) -> str:
         """Estimate if the material is a metal or insulator/semiconductor.
 
-        Strategy:
-            - Transition Metals / Rare Earths present -> 'metal'
-            - Only Main Group elements:
-                - If Anions present (O, F, N, etc.) -> Likely 'insulator' (e.g., SiO2, NaCl)
-                - No Anions -> Likely 'metal' or 'semimetal' (e.g., pure Al, Si), defaults to 'metal' for safety.
+        Strategy (Epic 3):
+            - Transition Metal + Anion (e.g. FeO, NiO) -> 'insulator' (Mott insulator logic)
+            - Transition Metal ONLY -> 'metal'
+            - Main Group + Anion -> 'insulator'
+            - Main Group ONLY -> 'metal' (default)
         """
         symbols = set(atoms.get_chemical_symbols())
         has_transition = any(cls._is_transition_metal(s) for s in symbols)
         has_rare_earth = any(cls._is_rare_earth(s) for s in symbols)
         has_anion = any(s in cls.ANIONS for s in symbols)
 
+        if (has_transition or has_rare_earth) and has_anion:
+            # Epic 3: FeO, NiO, etc. should be treated as insulators (fixed occupations)
+            return "insulator"
+
         if has_transition or has_rare_earth:
+            # Pure metals or alloys
             return "metal"
 
         if has_anion:
@@ -124,13 +129,48 @@ class PymatgenHeuristics:
             recommendations["system"]["degauss"] = 0.02
 
         # 2. Magnetism Logic
-        symbols = set(atoms.get_chemical_symbols())
-        has_magnetic = any(s in cls.MAGNETIC_ELEMENTS for s in symbols)
+        all_symbols = atoms.get_chemical_symbols()
+        symbols_set = set(all_symbols)
+        has_magnetic = any(s in cls.MAGNETIC_ELEMENTS for s in symbols_set)
 
         if has_magnetic:
             recommendations["magnetism"]["nspin"] = 2
+
+            # Epic 3: AFM Heuristic (Index-based Alternating)
+            # We construct 'starting_magnetization' list or map?
+            # QE uses per-species starting magnetization usually, unless we use atomic indices?
+            # The interface `starting_magnetization` in QE (via ASE) is typically a dict {Label: Moment}.
+            # But to support AFM, we need *per atom* moments, which ASE handles via `atoms.set_initial_magnetic_moments()`.
+            # This method returns recommendations for the CALCULATOR parameters or ATOMS preparation?
+            # "starting_magnetization" dict usually maps species -> value. This can't do AFM for mono-element systems (like AFM Cr).
+            # To support AFM, we must return a per-atom list or rely on caller to set it on atoms.
+            # The signature returns a dict. We will add a special key "initial_magnetic_moments" (list)
+            # which the caller (configurator) should apply to atoms.
+
+            initial_moments = []
+            mag_counter = 0
+
+            # Pymatgen oxidation state guess could be added here, but user said "High Spin" is acceptable default.
+            # We stick to cls.MAGNETIC_ELEMENTS for magnitude.
+
+            for s in all_symbols:
+                if s in cls.MAGNETIC_ELEMENTS:
+                    mag = cls.MAGNETIC_ELEMENTS[s]
+
+                    # Apply Alternating Flip (+ - + -) for magnetic species
+                    if mag_counter % 2 == 1:
+                        mag = -mag
+
+                    initial_moments.append(mag)
+                    mag_counter += 1
+                else:
+                    initial_moments.append(0.0)
+
+            recommendations["magnetism"]["initial_magnetic_moments"] = initial_moments
+
+            # Also provide the species-wise map for FM fallback or simple calculators
             mag_map = {}
-            for s in symbols:
+            for s in symbols_set:
                 if s in cls.MAGNETIC_ELEMENTS:
                     mag_map[s] = cls.MAGNETIC_ELEMENTS[s]
                 else:
