@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Dict, Optional
 from ase.io import read, write
 
-from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
-from orchestrator.src.services.kmc_service import KMCService
-from orchestrator.src.services.al_service import ActiveLearningService
+from src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
+from src.services.kmc_service import KMCService
+from src.services.al_service import ActiveLearningService
 from shared.core.config import Config
 from shared.core.enums import KMCStatus
 

@@ -9,7 +9,7 @@ import os
 # Ensure the orchestrator is in the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from orchestrator.src.setup.experiment_setup import ExperimentSetup
+from workers.al_md_kmc_worker.src.setup.experiment_setup import ExperimentSetup
 
 class TestExperimentSetup(unittest.TestCase):
     def setUp(self):

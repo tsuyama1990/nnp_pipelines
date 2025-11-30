@@ -9,7 +9,7 @@ from functools import partial
 from shared.core.interfaces import MDEngine
 from shared.core.enums import SimulationState
 from shared.core.config import Config
-from orchestrator.src.utils.parallel_executor import ParallelExecutor
+from src.utils.parallel_executor import ParallelExecutor
 
 logger = logging.getLogger(__name__)
 

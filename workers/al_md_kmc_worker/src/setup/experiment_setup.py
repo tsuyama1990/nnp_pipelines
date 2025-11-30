@@ -175,12 +175,14 @@ class ExperimentSetup:
         print(f"Generated pipeline script: {script_path}")
 
     def _get_script_content(self) -> str:
+        # Epic 9: Updated pipeline script for Unified Worker
         return f"""#!/bin/bash
 # Pipeline Execution Script for Experiment: {self.exp_name}
 # This script contains commented-out commands to run each step of the pipeline.
 # Uncomment lines to execute steps.
 
 # Define Directories
+# Note: $(pwd) refers to the 'configs' directory where this script is located.
 WORK_DIR=$(pwd)/../work
 CONFIGS_DIR=$(pwd)
 DATA_DIR=$(pwd)/../data
@@ -204,13 +206,14 @@ echo "Step 1: Generation"
 # Step 2: Pre-training (Seed Exploration)
 # -----------------------------------------------------------------------------
 echo "Step 2: Pre-training"
-# Note: This usually involves running MD on the generated structures to create diversity.
-# Often performed by lammps_worker or a dedicated exploration routine using a baseline potential.
-# docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data lammps_worker:latest \\
+# Using Unified Worker for MD
+# docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data al_md_kmc_worker:latest \\
 #     python /app/src/main.py md \\
 #     --config $CONFIGS_DIR/02_pretraining.yaml \\
+#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --structure $DATA_DIR/01_raw_structures.xyz \\
-#     --output $DATA_DIR/02_explored_structures.xyz
+#     --steps 1000 --gamma 1.0 \\
+#     --potential None
 
 # -----------------------------------------------------------------------------
 # Step 3: Sampling (Direct Selection)
@@ -248,25 +251,32 @@ echo "Step 5: Training"
 # Step 6: Production MD
 # -----------------------------------------------------------------------------
 echo "Step 6: Production MD"
-# docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data lammps_worker:latest \\
+# docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data al_md_kmc_worker:latest \\
 #     python /app/src/main.py md \\
 #     --config $CONFIGS_DIR/06_production.yaml \\
 #     --meta-config $CONFIGS_DIR/config_meta.yaml \\
 #     --potential $DATA_DIR/potential.yace \\
 #     --structure $DATA_DIR/initial_state.xyz \\
-#     --steps 10000
+#     --steps 10000 --gamma 0.1
 
 # -----------------------------------------------------------------------------
-# Step 7: Active Learning Loop
+# Step 7: Active Learning Loop (Unified Worker)
 # -----------------------------------------------------------------------------
 echo "Step 7: Active Learning"
-# This step might involve an orchestrator loop or specific AL worker calls.
-# docker run --rm -v $ROOT_DIR:/app -v $DATA_DIR:/data lammps_worker:latest \\
-#     python /app/src/main.py md \\
+# Runs the full AL loop.
+# IMPORTANT: Mounting docker.sock and setting HOST_WORK_DIR for DinD support.
+# HOST_WORK_DIR should point to the 'work' directory on the host machine.
+# Here we assume WORK_DIR maps correctly.
+# docker run --rm \\
+#     -v /var/run/docker.sock:/var/run/docker.sock \\
+#     -v $ROOT_DIR:/app \\
+#     -v $WORK_DIR:/app/work \\
+#     -v $DATA_DIR:/data \\
+#     -e HOST_WORK_DIR=$WORK_DIR \\
+#     al_md_kmc_worker:latest \\
+#     python /app/src/main.py start_loop \\
 #     --config $CONFIGS_DIR/07_active_learning.yaml \\
-#     --meta-config $CONFIGS_DIR/config_meta.yaml \\
-#     --potential $DATA_DIR/potential.yace \\
-#     --gamma 0.1
+#     --meta-config $CONFIGS_DIR/config_meta.yaml
 
 echo "Pipeline setup complete. Uncomment commands in run_pipeline.sh to run."
 """

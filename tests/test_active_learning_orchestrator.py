@@ -6,10 +6,10 @@ import numpy as np
 from typing import List, Tuple
 
 from src.sampling.strategies.max_vol import MaxVolSampler
-from src.workflows.orchestrator import ActiveLearningOrchestrator
-from src.core.config import Config, MDParams, ALParams, DFTParams, LJParams, TrainingParams
-from src.core.enums import SimulationState
-from src.core.interfaces import MDEngine, StructureGenerator, Labeler, Trainer
+from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
+from shared.core.config import Config, MDParams, ALParams, DFTParams, LJParams, TrainingParams
+from shared.core.enums import SimulationState
+from shared.core.interfaces import MDEngine, StructureGenerator, Labeler, Trainer
 
 @pytest.fixture
 def mock_atoms():

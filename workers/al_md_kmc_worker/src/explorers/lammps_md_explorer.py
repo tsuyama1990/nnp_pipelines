@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from ase import Atoms
 
-from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
-from orchestrator.src.services.md_service import MDService
+from src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
+from src.services.md_service import MDService
 from shared.core.config import Config
 
 logger = logging.getLogger(__name__)

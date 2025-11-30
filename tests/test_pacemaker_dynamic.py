@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch, mock_open
 import yaml
 import os
 from src.training.strategies.pacemaker import PacemakerTrainer
-from src.core.config import TrainingParams
+from shared.core.config import TrainingParams
 
 class TestPacemakerTrainerDynamic(unittest.TestCase):
     def setUp(self):

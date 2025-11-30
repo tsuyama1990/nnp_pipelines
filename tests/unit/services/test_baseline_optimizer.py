@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from ase import Atoms
-from orchestrator.src.services.baseline_optimizer import BaselineOptimizer
+from workers.al_md_kmc_worker.src.services.baseline_optimizer import BaselineOptimizer
 from shared.core.config import LJParams
 from shared.utils.fast_math import lj_energy_forces_jit
 

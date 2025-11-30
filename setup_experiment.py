@@ -18,7 +18,8 @@ import yaml
 # Add the parent directory of orchestrator to path so we can import modules
 sys.path.append(str(pathlib.Path(__file__).parent.resolve()))
 
-from orchestrator.src.setup.experiment_setup import ExperimentSetup
+# Updated import path for Unified Worker
+from workers.al_md_kmc_worker.src.setup.experiment_setup import ExperimentSetup
 
 def ensure_meta_config(path: pathlib.Path):
     """

@@ -2,7 +2,7 @@ import pytest
 from ase import Atoms
 from src.engines.dft.configurator import DFTConfigurator
 from src.workflows.seed_generation import SeedGenerator
-from src.scenario_generation.strategies.small_cell import SmallCellGenerator
+from shared.generators.small_cell import SmallCellGenerator
 from unittest.mock import MagicMock, patch
 
 @pytest.fixture

@@ -9,7 +9,7 @@ import yaml
 # Ensure src is in path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from orchestrator.workflows.seed_generation import SeedGenerator
+from workers.al_md_kmc_worker.src.workflows.seed_generation import SeedGenerator
 from shared.core.config import Config, SeedGenerationParams, MDParams, ALParams, MetaConfig
 
 class TestSeedGenerator(unittest.TestCase):

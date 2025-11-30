@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from src.utils.hardware import get_available_vram, suggest_batch_size
+from shared.utils.hardware import get_available_vram, suggest_batch_size
 
 class TestHardware(unittest.TestCase):
 

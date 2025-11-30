@@ -1,5 +1,5 @@
 import logging
-from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
+from src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
 
 logger = logging.getLogger(__name__)
 

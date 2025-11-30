@@ -7,11 +7,11 @@ from ase.build import bulk
 from pymatgen.core import Structure, Lattice
 from unittest.mock import MagicMock, patch
 
-from src.autostructure.builder import AutoStructureBuilder
-from src.autostructure.interface import InterfaceBuilder
-from src.autostructure.molecular import MolecularGenerator
-from src.autostructure.ionic import IonicGenerator
-from src.autostructure.preopt import PreOptimizer
+from shared.autostructure.builder import AutoStructureBuilder
+from shared.autostructure.interface import InterfaceBuilder
+from shared.autostructure.molecular import MolecularGenerator
+from shared.autostructure.ionic import IonicGenerator
+from shared.autostructure.preopt import PreOptimizer
 
 @pytest.fixture
 def dummy_structure():
