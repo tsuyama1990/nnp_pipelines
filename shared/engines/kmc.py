@@ -34,6 +34,22 @@ logger = logging.getLogger(__name__)
 
 KB_EV = constants.k / constants.e
 
+# Global variable to store the calculator within each worker process
+_WORKER_CALCULATOR = None
+
+def init_worker(potential_path: str, lj_params: LJParams, delta_learning_mode: bool, e0_dict: Dict[str, float]):
+    """
+    Worker initializer to load the heavy calculator only once per process.
+    This function is called by ProcessPoolExecutor when a new worker starts.
+    """
+    global _WORKER_CALCULATOR
+    # Logic to initialize the calculator (reusing _setup_calculator logic or similar)
+    # Create a dummy Atoms object to attach the calculator, then extract it
+    from ase import Atoms
+    dummy = Atoms("H")
+    _setup_calculator(dummy, potential_path, lj_params, delta_learning_mode, e0_dict)
+    _WORKER_CALCULATOR = dummy.calc
+
 def _setup_calculator(atoms: Atoms, potential_path: str, lj_params: LJParams, delta_learning_mode: bool, e0_dict: Dict[str, float] = None):
     """Attach the SumCalculator (ACE + LJ + E0) or PyACECalculator to the atoms."""
     if PyACECalculator is None:
@@ -115,10 +131,16 @@ def _run_local_search(
     """Run a single Dimer search on a carved cluster."""
     np.random.seed(seed)
 
-    _setup_calculator(cluster, potential_path, lj_params, delta_learning_mode, e0_dict)
+    if _WORKER_CALCULATOR is not None:
+        cluster.calc = _WORKER_CALCULATOR
+    else:
+        _setup_calculator(cluster, potential_path, lj_params, delta_learning_mode, e0_dict)
 
     search_atoms = cluster.copy()
-    _setup_calculator(search_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
+    if _WORKER_CALCULATOR is not None:
+        search_atoms.calc = _WORKER_CALCULATOR
+    else:
+        _setup_calculator(search_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
 
     # Coherent displacement initialization
     # Epic 3: Gradient-Guided Initialization
@@ -218,7 +240,10 @@ def _run_local_search(
 
         if converged:
             product_atoms = search_atoms.copy()
-            _setup_calculator(product_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
+            if _WORKER_CALCULATOR is not None:
+                product_atoms.calc = _WORKER_CALCULATOR
+            else:
+                _setup_calculator(product_atoms, potential_path, lj_params, delta_learning_mode, e0_dict)
 
             prod_opt = FIRE(product_atoms, logfile=None)
             prod_opt.run(fmax=kmc_params.dimer_fmax, steps=500)
@@ -465,7 +490,11 @@ class OffLatticeKMCEngine(KMCEngine):
         uncertain_results = []
 
         future_to_task = {}
-        with ProcessPoolExecutor(max_workers=self.kmc_params.n_workers) as executor:
+        with ProcessPoolExecutor(
+            max_workers=self.kmc_params.n_workers,
+            initializer=init_worker,
+            initargs=(potential_path, self.lj_params, self.delta_learning_mode, self.e0_dict)
+        ) as executor:
             for cluster, global_map in tasks:
                  global_map_set = set(global_map)
                  active_in_cluster = [i for i, g in enumerate(global_map) if g in candidate_indices]
