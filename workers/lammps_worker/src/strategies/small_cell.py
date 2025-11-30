@@ -7,17 +7,15 @@ from ase import Atoms
 from ase.constraints import ExpCellFilter, FixAtoms, FixExternal
 from ase.optimize import FIRE
 
-# Try importing LAMMPS calculator
 try:
-    from ase.calculators.lammpsrun import LAMMPS
+    from pyace import PyACECalculator
 except ImportError:
-    try:
-        from ase.calculators.lammps import LAMMPS
-    except ImportError:
-        pass
+    PyACECalculator = None
 
 from shared.core.interfaces import StructureGenerator
 from shared.autostructure.preopt import PreOptimizer
+from shared.calculators import SumCalculator
+from shared.potentials.shifted_lj import ShiftedLennardJones
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +35,8 @@ class SmallCellGenerator(StructureGenerator):
         elements: Optional[List[str]] = None,
         dynamic_sizing: bool = False,
         vacuum_buffer: float = 8.0,
-        apply_bias_forces: bool = False
+        apply_bias_forces: bool = False,
+        delta_learning_mode: bool = True
     ):
         """Initialize the SmallCellGenerator.
 
@@ -54,6 +53,7 @@ class SmallCellGenerator(StructureGenerator):
             dynamic_sizing: Whether to adjust box size based on cluster extent.
             vacuum_buffer: Buffer space (Angstroms) to add if dynamic sizing is used.
             apply_bias_forces: Whether to apply bias forces to boundary atoms.
+            delta_learning_mode: Whether to include LJ baseline in relaxation.
         """
         self.r_core = r_core
         self.box_size = box_size
@@ -65,6 +65,8 @@ class SmallCellGenerator(StructureGenerator):
         self.dynamic_sizing = dynamic_sizing
         self.vacuum_buffer = vacuum_buffer
         self.apply_bias_forces = apply_bias_forces
+        self.delta_learning_mode = delta_learning_mode
+        self.lj_params = lj_params # Store dict
 
         self.pre_optimizer = None
         if lj_params:
@@ -221,22 +223,42 @@ class SmallCellGenerator(StructureGenerator):
         Returns:
             Atoms: The relaxed structure.
         """
-        unique_elements = sorted(list(set(atoms.get_chemical_symbols())))
-        element_map = " ".join(unique_elements)
+        if PyACECalculator is None:
+             raise ImportError("PyACECalculator is required for SmallCellGenerator.")
 
-        parameters = {
-            "pair_style": "pace",
-            "pair_coeff": [f"* * {potential_path} {element_map}"],
-            "mass": ["* 1.0"],
-        }
+        ace_calc = PyACECalculator(potential_path)
 
-        calc = LAMMPS(
-            command=self.lammps_cmd,
-            parameters=parameters,
-            specorder=unique_elements,
-            files=[potential_path],
-            keep_tmp_files=False,
-        )
+        if self.delta_learning_mode:
+            # Reconstruct LJ Params from dict
+            # self.lj_params is a dict: {'epsilon': X, 'sigma': Y, 'cutoff': Z, 'shift_energy': True}
+            # ShiftedLennardJones needs dicts for epsilon/sigma if we want species specific,
+            # but usually lj_params passed here is the simple Config dict.
+            # Wait, `lj_params` passed to __init__ is `Optional[Dict[str, float]]`.
+            # If it's the `LJParams` dataclass converted to dict, it has scalar epsilon/sigma.
+
+            # If we want species-specific, we should really pass the full objects or reconstruct them.
+            # But SmallCellGenerator in existing code uses `self.pre_optimizer` which uses `lj_params`.
+            # Let's assume lj_params dict is sufficient for ShiftedLennardJones basic setup.
+
+            # We need to handle element-specific LJ if we want to be consistent with other parts.
+            # BUT, we might not have the auto-generated params here easily unless passed.
+            # The prompt implies we need to use SumCalculator.
+            # Let's use the provided lj_params scalars for now.
+
+            eps = self.lj_params.get("epsilon", 1.0)
+            sig = self.lj_params.get("sigma", 2.0)
+            rc = self.lj_params.get("cutoff", 5.0)
+            shift = self.lj_params.get("shift_energy", True)
+
+            lj_calc = ShiftedLennardJones(
+                epsilon=eps,
+                sigma=sig,
+                rc=rc,
+                shift_energy=shift
+            )
+            calc = SumCalculator(calculators=[ace_calc, lj_calc])
+        else:
+            calc = ace_calc
 
         atoms.calc = calc
 

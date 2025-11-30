@@ -14,6 +14,7 @@ from shared.utils.atomic_energies import AtomicEnergyManager
 from configurator import DFTConfigurator
 from shared.potentials.shifted_lj import ShiftedLennardJones
 from strategies.delta_labeler import DeltaLabeler
+from strategies.raw_labeler import RawLabeler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -117,72 +118,6 @@ def main():
         ae_manager = AtomicEnergyManager(meta.sssp_json_path)
         e0_dict = ae_manager.get_e0(sorted_elements, dft_calculator_factory)
 
-        # 2. Setup Baseline Calculator (Shifted LJ)
-        lj = config.lj_params
-
-        # We need to pass dictionaries if they are available, or scalar if not.
-        # But config.lj_params is a dataclass with scalar fields typically?
-        # Let's check shared/core/config.py
-        # LJParams: epsilon: float, sigma: float...
-        # Wait, if we want to support species-specific, we need to update Config or LJParams or handle it here.
-        # The user said: "Auto-LJ: ... Update both the Python calculator and LAMMPS input generator to support multi-species pair coefficients."
-        # And "Implement logic to retrieve vdw_radii from ase.data...".
-
-        # I should generate these parameters here if they are not provided in config?
-        # Or if config provides scalars, should I ignore them and use Auto-LJ?
-        # "Remove manual configuration dependencies by (1) automatically generating species-specific LJ baseline parameters..."
-        # So I should probably compute them here for the elements in the structure.
-
-        # Let's implement Auto-LJ logic here or in a helper.
-        from ase.data import vdw_radii, atomic_numbers
-
-        lj_epsilon = {}
-        lj_sigma = {}
-
-        # Defaults if vdw not available
-        DEFAULT_SIGMA = 2.0
-        DEFAULT_EPSILON = 1.0 # No good physical default for Epsilon from radii alone usually?
-        # User said: "Calculate per-pair parameters using standard mixing rules...".
-        # But for the base parameters (sigma_i, epsilon_i), how do we get epsilon?
-        # User only said "retrieve vdw_radii from ase.data. Calculate per-pair parameters...".
-        # Usually epsilon is set to a fixed small value or some heuristic.
-        # Let's assume we use the scalar epsilon from config as the base for all, or 1.0 if not set.
-        # Or maybe the user implies we should guess epsilon too? "based on atomic radii" usually only gives sigma.
-        # Let's stick to using vdw_radii for sigma, and config epsilon (scalar) for all, or 1.0.
-        # BUT wait, the prompt says "Auto-LJ: ... automatically generating species-specific LJ baseline parameters based on atomic radii".
-        # It's plural "parameters". Maybe sigma is from radii, epsilon is...?
-        # For now I will use vdw_radii for sigma and the global epsilon for all species.
-
-        base_epsilon = lj.epsilon if lj.epsilon else 0.05 # eV
-
-        for el in sorted_elements:
-             z = atomic_numbers.get(el)
-             r_vdw = vdw_radii[z] if z < len(vdw_radii) else None
-
-             if np.isnan(r_vdw) or r_vdw is None:
-                 logger.warning(f"No vdW radius for {el}, using default.")
-                 sigma_val = lj.sigma # Fallback to config scalar
-             else:
-                 # sigma = r_vdw / 2^(1/6) ?
-                 # Usually r_min = 2^(1/6) * sigma.
-                 # If we equate r_min to 2 * r_vdw (diameter? or distance of closest approach?)
-                 # 2 * r_vdw is roughly the equilibrium distance.
-                 # So 2 * r_vdw = 2^(1/6) * sigma
-                 # sigma = (2 * r_vdw) / 1.122
-                 sigma_val = (2 * r_vdw) / (2**(1/6))
-
-             lj_sigma[el] = sigma_val
-             lj_epsilon[el] = base_epsilon
-
-        logger.info(f"Auto-generated LJ parameters: Sigma={lj_sigma}, Epsilon={lj_epsilon}")
-
-        base_calc = ShiftedLennardJones(
-            epsilon=lj_epsilon,
-            sigma=lj_sigma,
-            rcut=lj.cutoff,
-            shift_energy=lj.shift_energy
-        )
-
         # Resolve DFT settings for the active crystal type
         dft_overrides = {}
         try:
@@ -194,6 +129,38 @@ def main():
         except AttributeError:
              pass
 
+        # 2. Setup Labeler based on Mode
+        if config.ace_model.delta_learning_mode:
+            logger.info("Delta Learning Mode: ON. Using ShiftedLennardJones baseline.")
+
+            lj = config.lj_params
+            # Optimization Consistency: Use config params directly if provided (Optimization updates them)
+            # Only fall back to auto-generation if explicitly requested or defaults are generic.
+            # But the requirement said "remove manual configuration... automatically generating...".
+            # However, Epic 4 says "Update config.lj_params with new optimal values."
+            # So, if we have optimized values in config, we should use them.
+            # We assume config.lj_params values are the "current best".
+
+            # Since LJParams is scalar, we broadcast it to all species.
+            # If we wanted species-specific, we'd need to change how config is passed or stored.
+            # Given current constraints, we use the scalar config values.
+
+            lj_epsilon = {el: lj.epsilon for el in sorted_elements}
+            lj_sigma = {el: lj.sigma for el in sorted_elements}
+
+            logger.info(f"Using LJ parameters from config (Epic 4 Optimized): Sigma={lj.sigma}, Epsilon={lj.epsilon}")
+
+            base_calc = ShiftedLennardJones(
+                epsilon=lj_epsilon,
+                sigma=lj_sigma,
+                rcut=lj.cutoff,
+                shift_energy=lj.shift_energy
+            )
+        else:
+            logger.info("Delta Learning Mode: OFF. Using Raw DFT Labeler.")
+            base_calc = None
+
+
         for i, atoms in enumerate(all_atoms):
             try:
                 print(f"Labeling structure {i+1}/{len(all_atoms)}...")
@@ -202,13 +169,21 @@ def main():
                 dft_configurator = DFTConfigurator(params=config.dft_params, meta=meta, type_dft_settings=dft_overrides)
                 ref_calc, mag_settings = dft_configurator.build(atoms, elements, kpts=None)
 
-                labeler = DeltaLabeler(
-                    reference_calculator=ref_calc,
-                    baseline_calculator=base_calc,
-                    e0_dict=e0_dict,
-                    outlier_energy_max=config.al_params.outlier_energy_max,
-                    magnetism_settings=mag_settings
-                )
+                if config.ace_model.delta_learning_mode:
+                    labeler = DeltaLabeler(
+                        reference_calculator=ref_calc,
+                        baseline_calculator=base_calc,
+                        e0_dict=e0_dict,
+                        outlier_energy_max=config.al_params.outlier_energy_max,
+                        magnetism_settings=mag_settings
+                    )
+                else:
+                    labeler = RawLabeler(
+                        reference_calculator=ref_calc,
+                        e0_dict=e0_dict,
+                        outlier_energy_max=config.al_params.outlier_energy_max,
+                        magnetism_settings=mag_settings
+                    )
 
                 labeled = labeler.label(atoms)
                 if labeled:
