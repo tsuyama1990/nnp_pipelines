@@ -48,31 +48,67 @@ This project follows a **Micro-kernel Architecture**:
     docker build -t lammps_worker:latest -f workers/lammps_worker/Dockerfile .
     ```
 
-## Usage
+## 🚀 Usage Workflow
 
-1.  **Configuration:**
-    Edit `config.yaml` to set your experiment parameters (elements, temperature, DFT settings, etc.).
+本パイプラインは、再現性と設定管理のために `setup_experiment.py` を唯一のエントリーポイントとして設計されています。
+直接 `orchestrator/main.py` を実行することは推奨されません。
 
-    *   **Structure Generation:** You can configure `gen_worker` to use strategies like `random_symmetry` (PyXtal) to explore new structures. See `workers/gen_worker/README.md` for details.
+### 1. Configuration (設定)
+実験の設定は `config.yaml` で管理します。
+目的に応じて設定ファイルをコピー・編集してください。
 
-2.  **Setup Experiment:**
-    Run the setup script to initialize the experiment structure and generate configuration files.
-    ```bash
-    uv run setup_experiment.py
-    ```
-    This will create an `experiment_<name>` directory with all necessary configurations and a `run_pipeline.sh` script.
+```bash
+cp config.yaml my_experiment_config.yaml
+# vim my_experiment_config.yaml
+```
 
-3.  **Run the Orchestrator:**
-    ```bash
-    uv run orchestrator/main.py
-    ```
+### 2\. Initialize & Run Experiment (実行)
 
-    The system will:
-    1.  Check for an initial potential. If missing, it triggers `gen_worker` to create seed data.
-    2.  Label data using `dft_worker`.
-    3.  Train a potential using `pace_worker`.
-    4.  Run MD/KMC simulations using `lammps_worker`.
-    5.  Monitor uncertainty and loop back to step 2 if necessary.
+`setup_experiment.py` を介して実験を開始します。このスクリプトは以下の処理を自動化します：
+
+1.  **Workspace作成:** ユニークな実験IDを持つディレクトリ（`experiments/YYYYMMDD_HHMMSS_Name`）を作成。
+2.  **Config凍結:** 使用した設定ファイルを実験ディレクトリ内にコピー（再現性の担保）。
+3.  **初期化:** Seed生成、初期ポテンシャルの準備。
+4.  **パイプライン起動:** `ActiveLearningOrchestrator` のプロセスを開始。
+
+#### 基本コマンド
+
+```bash
+# デフォルト設定で実行
+uv run setup_experiment.py
+
+# 設定ファイルを指定して実行（推奨）
+uv run setup_experiment.py --config my_experiment_config.yaml
+
+# 実験名（タグ）を付けて実行
+uv run setup_experiment.py --config config.yaml --name "al_ni_system_v1"
+```
+
+### 3\. Directory Structure (出力構造)
+
+実行後、以下のディレクトリ構造が自動生成されます。
+
+```text
+work/
+└── 07_active_learning/          # アクティブラーニングのメイン作業領域
+    ├── experiment_state.json    # 中断再開用のステートファイル
+    ├── config_snapshot.yaml     # 実行時の設定（凍結）
+    ├── iteration_1/             # イテレーションごとの計算結果
+    │   ├── candidate.xyz
+    │   ├── train.xyz
+    │   └── potential_v1.yace
+    └── logs/
+        └── experiment.log
+```
+
+### 4\. Resume / Restart (中断と再開)
+
+実験が中断した場合、生成された実験ディレクトリを指定して再開します。
+
+```bash
+# 特定の実験ディレクトリから再開する場合
+uv run setup_experiment.py --resume work/07_active_learning/ --iteration 5
+```
 
 ## Directory Structure
 
