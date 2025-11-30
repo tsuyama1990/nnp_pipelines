@@ -7,7 +7,7 @@ from ase import units
 from ase.calculators.calculator import Calculator
 from typing import Dict, Optional
 
-from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
+from src.interfaces.explorer import BaseExplorer, ExplorationResult, ExplorationStatus
 
 # We assume we have a way to load the potential as an ASE calculator.
 # Since the project uses pace/lammps, we might need a calculator adapter.

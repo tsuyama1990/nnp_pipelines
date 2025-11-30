@@ -4,7 +4,7 @@ import logging
 import numpy as np
 from typing import Dict, Optional, List
 from ase import Atoms
-from ase.constraints import ExpCellFilter, FixAtoms, FixExternal
+from ase.constraints import ExpCellFilter, FixAtoms
 from ase.optimize import FIRE
 
 try:

@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 import numpy as np
 from ase import Atoms
-from src.scenario_generation.strategies.small_cell import SmallCellGenerator
+from shared.generators.small_cell import SmallCellGenerator
 from src.sampling.strategies.max_gamma import MaxGammaSampler
 
 class TestSmallCellGenerator(unittest.TestCase):

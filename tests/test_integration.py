@@ -6,10 +6,10 @@ import shutil
 import tempfile
 from pathlib import Path
 from ase import Atoms
-from src.core.config import Config
+from shared.core.config import Config
 from src.main import main
-from src.workflows.orchestrator import ActiveLearningOrchestrator
-from src.utils.logger import CSVLogger
+from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
+from shared.utils.logger import CSVLogger
 
 class TestIntegrationPhase3(unittest.TestCase):
     def setUp(self):

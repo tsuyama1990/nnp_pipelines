@@ -9,7 +9,7 @@ from pathlib import Path
 
 from shared.core.interfaces import MDEngine
 from shared.core.enums import SimulationState
-from .input_generator import LAMMPSInputGenerator
+from shared.io.lammps_input import LAMMPSInputGenerator
 
 class LAMMPSRunner(MDEngine):
     """Handles execution of LAMMPS simulations.

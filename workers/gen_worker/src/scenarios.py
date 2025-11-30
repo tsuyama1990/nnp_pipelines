@@ -8,7 +8,7 @@ from ase import Atoms
 from ase.build import bulk, surface, stack
 import numpy as np
 
-from candidate import RandomStructureGenerator
+from shared.generators.alloy import RandomStructureGenerator
 from shared.autostructure.alloy import AlloyGenerator
 from shared.autostructure.ionic import IonicGenerator
 from shared.autostructure.covalent import CovalentGenerator

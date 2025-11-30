@@ -11,10 +11,10 @@ sys.modules["pacemaker"] = MagicMock()
 logging.basicConfig(level=logging.CRITICAL)
 
 from ase import Atoms
-from src.core.config import Config
-from src.core.interfaces import MDEngine, KMCEngine, Sampler, StructureGenerator, Labeler, Trainer
-from src.core.enums import SimulationState, KMCStatus
-from src.workflows.orchestrator import ActiveLearningOrchestrator
+from shared.core.config import Config
+from shared.core.interfaces import MDEngine, KMCEngine, Sampler, StructureGenerator, Labeler, Trainer
+from shared.core.enums import SimulationState, KMCStatus
+from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
 
 class TestIntegrationV2(unittest.TestCase):
     def setUp(self):

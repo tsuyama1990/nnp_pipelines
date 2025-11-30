@@ -3,8 +3,8 @@ import numpy as np
 from ase import Atoms
 from ase.constraints import FixAtoms
 from unittest.mock import patch
-from src.engines.kmc import OffLatticeKMCEngine
-from src.core.config import KMCParams, ALParams
+from shared.engines.kmc import OffLatticeKMCEngine
+from shared.core.config import KMCParams, ALParams
 from ase.neighborlist import NeighborList
 
 def create_test_system():

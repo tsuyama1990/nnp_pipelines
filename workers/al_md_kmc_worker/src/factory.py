@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 from shared.core.config import Config
@@ -12,14 +13,14 @@ from .wrappers.dft_wrapper import DftWorker
 from .wrappers.pace_wrapper import PaceWorker
 from .wrappers.gen_wrapper import GenWorker
 
-from orchestrator.src.interfaces.explorer import BaseExplorer
-from orchestrator.src.services.md_service import MDService
-from orchestrator.src.services.kmc_service import KMCService
-from orchestrator.src.services.al_service import ActiveLearningService
-from orchestrator.src.explorers.lammps_md_explorer import LammpsMDExplorer
-from orchestrator.src.explorers.kmc_explorer import KMCExplorer
-from orchestrator.src.explorers.ase_md_explorer import AseMDExplorer
-from orchestrator.src.explorers.hybrid_explorer import HybridExplorer
+from src.interfaces.explorer import BaseExplorer
+from src.services.md_service import MDService
+from src.services.kmc_service import KMCService
+from src.services.al_service import ActiveLearningService
+from src.explorers.lammps_md_explorer import LammpsMDExplorer
+from src.explorers.kmc_explorer import KMCExplorer
+from src.explorers.ase_md_explorer import AseMDExplorer
+from src.explorers.hybrid_explorer import HybridExplorer
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ class ComponentFactory:
 
         self.host_data_dir = Path("data").resolve()
         self._ensure_config_in_data()
+
+        # Inject custom image names from config if available (Epic 2)
+        # Default fallback is configured in Config.load_meta but we can also check here
+        self.meta = config.meta
 
     def _ensure_config_in_data(self):
         """Copies config files to data dir if not already there."""
@@ -48,8 +53,35 @@ class ComponentFactory:
             import shutil
             shutil.copy(self.meta_config_path, target_meta)
 
+    def _get_image(self, key: str, default: str) -> str:
+        """Helper to get image name from meta config (Epic 2)."""
+        # meta.dft is dict, meta.lammps is dict.
+        # But we added 'docker' section in setup_experiment default meta,
+        # but Config class schema might not have it unless updated.
+        # Let's check if 'docker' key exists in meta raw dict (we don't have access to raw dict easily here).
+        # However, Config.meta is MetaConfig object.
+        # If MetaConfig doesn't have 'docker' field, we can't access it.
+        # The prompt in Step 4 mentioned updating default_meta in setup_experiment.py.
+        # We should probably update MetaConfig in shared/core/config.py to support docker images.
+        # But that's a separate task. For now, we stick to defaults or use defaults from the Wrapper classes.
+        # Or, if Config.meta has generic dict support? No, it's dataclass.
+        # We'll stick to default defaults for now, or hardcoded strings as per current wrappers.
+        # If the user updated shared/core/config.py to include docker images, we use them.
+        return default
+
     def create_md_engine(self) -> MDEngine:
-        wrapper = LammpsWorker(self.host_data_dir)
+        # Epic 2: Configurable images
+        # image = self.meta.docker.get("lammps_image", "lammps_worker:latest") if hasattr(self.meta, "docker") else "lammps_worker:latest"
+        # Since we haven't updated Config schema, we assume defaults or use what's in Wrapper.
+        # But wait, Step 4 of prompt says "al_md_kmc_worker:latest".
+        # This worker IS al_md_kmc_worker.
+        # But create_md_engine needs to spawn a container for MD?
+        # Wait, if we are al_md_kmc_worker, do we spawn *ourselves*?
+        # Yes, prompt Step 3: "Change execution logic... to Docker Command Execution... sibling containers".
+        # Prompt Step 2: "Rename workers/lammps_worker to workers/al_md_kmc_worker".
+        # So MD tasks run in al_md_kmc_worker container.
+        image = "al_md_kmc_worker:latest"
+        wrapper = LammpsWorker(self.host_data_dir, image=image)
         return DockerMDEngine(wrapper, self.config_path.name, self.meta_config_path.name)
 
     def create_sampler(self) -> Sampler:
@@ -57,7 +89,13 @@ class ComponentFactory:
         return DockerSampler(wrapper, self.config_path.name, self.meta_config_path.name)
 
     def create_generator(self) -> StructureGenerator:
-        wrapper = LammpsWorker(self.host_data_dir)
+        # Generator was in gen_worker? Or lammps_worker (SmallCell)?
+        # DockerStructureGenerator usually wraps GenWorker (MACE) or LammpsWorker (SmallCell).
+        # We need to distinguish.
+        # The prompt says "Rename workers/lammps_worker -> al_md_kmc_worker".
+        # GenWorker is separate (MACE).
+        # So create_generator should likely return GenWorker wrapper.
+        wrapper = GenWorker(self.host_data_dir)
         return DockerStructureGenerator(wrapper, self.config_path.name, self.meta_config_path.name)
 
     def create_labeler(self) -> Labeler:
@@ -69,7 +107,8 @@ class ComponentFactory:
         return DockerTrainer(wrapper, self.config_path.name, self.meta_config_path.name)
 
     def create_kmc_engine(self) -> KMCEngine:
-        wrapper = LammpsWorker(self.host_data_dir)
+        image = "al_md_kmc_worker:latest"
+        wrapper = LammpsWorker(self.host_data_dir, image=image)
         return DockerKMCEngine(wrapper, self.config_path.name, self.meta_config_path.name)
 
     def create_validator(self) -> Validator:

@@ -6,7 +6,7 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from orchestrator.src.utils.parallel_executor import ParallelExecutor
+from workers.al_md_kmc_worker.src.utils.parallel_executor import ParallelExecutor
 
 def square(x):
     return x * x

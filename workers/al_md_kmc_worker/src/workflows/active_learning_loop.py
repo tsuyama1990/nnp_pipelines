@@ -16,9 +16,9 @@ from shared.core.config import Config
 from shared.core.enums import KMCStatus
 from shared.utils.logger import CSVLogger
 
-from orchestrator.src.state_manager import StateManager
-from orchestrator.src.services.al_service import ActiveLearningService
-from orchestrator.src.interfaces.explorer import BaseExplorer, ExplorationStatus
+from src.state_manager import StateManager
+from src.services.al_service import ActiveLearningService
+from src.interfaces.explorer import BaseExplorer, ExplorationStatus
 
 logger = logging.getLogger(__name__)
 

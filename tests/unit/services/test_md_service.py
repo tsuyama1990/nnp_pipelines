@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from orchestrator.src.services.md_service import MDService
+from workers.al_md_kmc_worker.src.services.md_service import MDService
 from shared.core.config import Config
 from shared.core.enums import SimulationState
 
