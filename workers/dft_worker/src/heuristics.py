@@ -6,7 +6,7 @@ It gracefully falls back to internal logic if pymatgen is not installed.
 """
 
 import logging
-from typing import Dict, Any, Set, List
+from typing import Dict, Any, Set, List, Optional
 from ase import Atoms
 from ase.data import chemical_symbols
 
@@ -69,21 +69,43 @@ class PymatgenHeuristics:
             return symbol in FALLBACK_RARE_EARTHS
 
     @classmethod
-    def get_recommended_params(cls, atoms: Atoms) -> Dict[str, Any]:
+    def _estimate_electronic_type(cls, atoms: Atoms) -> str:
+        """Estimate if the material is a metal or insulator/semiconductor.
+
+        Strategy:
+            - Transition Metals / Rare Earths present -> 'metal'
+            - Only Main Group elements:
+                - If Anions present (O, F, N, etc.) -> Likely 'insulator' (e.g., SiO2, NaCl)
+                - No Anions -> Likely 'metal' or 'semimetal' (e.g., pure Al, Si), defaults to 'metal' for safety.
+        """
+        symbols = set(atoms.get_chemical_symbols())
+        has_transition = any(cls._is_transition_metal(s) for s in symbols)
+        has_rare_earth = any(cls._is_rare_earth(s) for s in symbols)
+        has_anion = any(s in cls.ANIONS for s in symbols)
+
+        if has_transition or has_rare_earth:
+            return "metal"
+
+        if has_anion:
+            # Main group + Anion -> Likely Ionic/Covalent Insulator
+            return "insulator"
+
+        # Main group, no anions (e.g. Pure Si, Graphite, Al)
+        # Defaulting to metal (smearing) is safer for convergence than assuming fixed gap.
+        return "metal"
+
+    @classmethod
+    def get_recommended_params(cls, atoms: Atoms, override_type: Optional[str] = None) -> Dict[str, Any]:
         """Infer recommended DFT parameters for the given structure.
 
         Args:
             atoms: The ASE Atoms object to analyze.
+            override_type: 'metal' or 'insulator' to force specific logic.
 
         Returns:
             dict: Dictionary containing recommendations for 'system' and magnetic settings.
         """
-        symbols = set(atoms.get_chemical_symbols())
-
-        has_transition = any(cls._is_transition_metal(s) for s in symbols)
-        has_rare_earth = any(cls._is_rare_earth(s) for s in symbols)
-        has_anion = any(s in cls.ANIONS for s in symbols)
-        has_magnetic = any(s in cls.MAGNETIC_ELEMENTS for s in symbols)
+        elec_type = override_type if override_type else cls._estimate_electronic_type(atoms)
 
         recommendations = {
             "system": {},
@@ -93,45 +115,26 @@ class PymatgenHeuristics:
             }
         }
 
-        # 1. Smearing (DOS at Ef) Logic
-        # Strategy:
-        # - Transition/Rare Earth present -> Likely Metallic DOS -> Occupations = 'smearing'
-        # - Anion present -> Likely Oxide/Semiconductor/Insulator -> Low Smearing (degauss=0.01)
-        # - No Anion (Pure Metal/Alloy) -> Standard Smearing (degauss=0.02)
-        # - No TM/RE and No Anion (e.g. Si, C) -> Could be anything, default to small smearing for safety or fixed if sure.
-        #   "Safety-First" approach: defaulting to smearing is safer for convergence than fixed.
-
-        if has_transition or has_rare_earth:
-            recommendations["system"]["occupations"] = "smearing"
-            recommendations["system"]["smearing"] = "mv" # Methfessel-Paxton is standard for metals
-
-            if has_anion:
-                # Likely oxide/insulator, sharpen the smearing
-                recommendations["system"]["degauss"] = 0.01
-            else:
-                # Metal/Alloy
-                recommendations["system"]["degauss"] = 0.02
+        # 1. Smearing / Occupations
+        if elec_type == "insulator":
+            recommendations["system"]["occupations"] = "fixed"
         else:
-            # Main group elements or simple s-block
-            # Still safer to use small smearing for DFT convergence unless strictly insulating
             recommendations["system"]["occupations"] = "smearing"
-            recommendations["system"]["smearing"] = "mv"
-            recommendations["system"]["degauss"] = 0.01
+            recommendations["system"]["smearing"] = "mv" # Methfessel-Paxton
+            recommendations["system"]["degauss"] = 0.02
 
         # 2. Magnetism Logic
+        symbols = set(atoms.get_chemical_symbols())
+        has_magnetic = any(s in cls.MAGNETIC_ELEMENTS for s in symbols)
+
         if has_magnetic:
             recommendations["magnetism"]["nspin"] = 2
-
-            # Build starting_magnetization dict
-            # In Quantum Espresso, starting_magnetization(i) is set per species index.
-            # We return a map {Element: moment} which the Configurator will map to QE species indices.
             mag_map = {}
             for s in symbols:
                 if s in cls.MAGNETIC_ELEMENTS:
                     mag_map[s] = cls.MAGNETIC_ELEMENTS[s]
                 else:
-                    mag_map[s] = 0.0 # Explicitly 0 for others if needed, or leave out
-
+                    mag_map[s] = 0.0
             recommendations["magnetism"]["moments"] = mag_map
 
         return recommendations

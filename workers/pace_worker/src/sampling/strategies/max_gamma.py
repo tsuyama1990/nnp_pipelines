@@ -5,7 +5,7 @@ highest extrapolation grade (gamma), indicating high uncertainty.
 """
 
 import logging
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Optional
 import numpy as np
 from ase import Atoms
 
@@ -22,8 +22,10 @@ class MaxGammaSampler(Sampler):
         Args:
             candidates: List of candidate structures.
             n_samples: Number of structures to select.
-            **kwargs: Must contain 'gammas' (List[float]) corresponding to candidates,
-                      or we assume gammas are stored in atoms.info['max_gamma'].
+            **kwargs:
+                - 'gammas' (List[float]): Global max gammas.
+                - 'atom_indices' (List[int], optional): If provided, re-evaluates max_gamma
+                  only on these atoms (requires per-atom gamma in atoms.arrays['gamma']).
 
         Returns:
             List[Tuple[Atoms, int]]: List of selected (structure, original_index) tuples.
@@ -36,33 +38,39 @@ class MaxGammaSampler(Sampler):
              return [(c, i) for i, c in enumerate(candidates)]
 
         # Extract gammas
-        # We expect 'gammas' in kwargs OR 'max_gamma' in atoms.info
-        gammas = kwargs.get('gammas')
+        gammas = []
+        atom_indices = kwargs.get('atom_indices') # Epic 6: Local MaxGamma
 
-        if gammas is None:
-            # Try to get from info
-            try:
-                gammas = [atoms.info.get('max_gamma', 0.0) for atoms in candidates]
-            except Exception as e:
-                logger.warning(f"Could not retrieve gammas from atoms.info: {e}. defaulting to 0.0")
-                gammas = [0.0] * n_candidates
+        for atoms in candidates:
+            if atom_indices is not None and 'gamma' in atoms.arrays:
+                # Local evaluation
+                # Check if indices are valid
+                valid_indices = [i for i in atom_indices if i < len(atoms)]
+                if valid_indices:
+                    local_gammas = atoms.arrays['gamma'][valid_indices]
+                    gammas.append(np.max(local_gammas))
+                else:
+                    gammas.append(0.0) # Indices out of range or empty
+            elif 'max_gamma' in atoms.info:
+                gammas.append(atoms.info['max_gamma'])
+            elif 'gamma' in atoms.arrays:
+                gammas.append(np.max(atoms.arrays['gamma']))
+            else:
+                gammas.append(0.0)
 
         if len(gammas) != n_candidates:
             logger.error("Length of gammas does not match candidates.")
             return []
 
         # Sort by gamma descending
-        # valid indices
         indices = list(range(n_candidates))
-
-        # Sort indices based on gamma values (descending)
         indices.sort(key=lambda i: gammas[i], reverse=True)
 
         selected_indices = indices[:n_samples]
 
-        # Log selection
-        logger.info(f"MaxGammaSampler: Selected {len(selected_indices)} structures. "
-                    f"Top Gamma: {gammas[selected_indices[0]]:.4f}, "
-                    f"Bottom Gamma: {gammas[selected_indices[-1]]:.4f}")
+        if selected_indices:
+            logger.info(f"MaxGammaSampler: Selected {len(selected_indices)} structures. "
+                        f"Top Gamma: {gammas[selected_indices[0]]:.4f}, "
+                        f"Bottom Gamma: {gammas[selected_indices[-1]]:.4f}")
 
         return [(candidates[i], i) for i in selected_indices]

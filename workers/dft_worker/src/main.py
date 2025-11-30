@@ -12,7 +12,7 @@ sys.path.append("/app")
 from shared.core.config import Config
 from shared.utils.atomic_energies import AtomicEnergyManager
 from configurator import DFTConfigurator
-from calculators.shifted_lj import ShiftedLennardJones
+from shared.potentials.shifted_lj import ShiftedLennardJones
 from strategies.delta_labeler import DeltaLabeler
 
 logging.basicConfig(level=logging.INFO)
