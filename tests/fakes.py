@@ -4,6 +4,10 @@ worker_path = os.path.join(os.getcwd(), 'workers/al_md_kmc_worker')
 if worker_path not in sys.path:
     sys.path.append(worker_path)
 
+# Add root to sys.path to find shared
+if os.getcwd() not in sys.path:
+    sys.path.append(os.getcwd())
+
 from typing import Optional, List
 from pathlib import Path
 from ase import Atoms

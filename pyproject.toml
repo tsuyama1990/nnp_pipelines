@@ -23,6 +23,8 @@ dependencies = [
     "torchaudio",
     "pytest-mock>=3.15.1",
     "numba>=0.62.1",
+    "pydantic",
+    "hypothesis",
 ]
 
 [build-system]

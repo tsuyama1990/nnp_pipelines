@@ -22,6 +22,10 @@ from src.interfaces.explorer import BaseExplorer, ExplorationStatus
 
 logger = logging.getLogger(__name__)
 
+class HandledOrchestratorError(RuntimeError):
+    """Exception raised for handled errors in the orchestrator that should stop execution cleanly."""
+    pass
+
 class ActiveLearningOrchestrator:
     """Manages the active learning loop using specialized services."""
 
@@ -175,7 +179,7 @@ class ActiveLearningOrchestrator:
                     if exploration_result.status == ExplorationStatus.UNCERTAIN:
                         max_retries = getattr(self.config.al_params, 'max_al_retries', 3)
                         if al_consecutive_counter >= max_retries:
-                            raise RuntimeError("Max AL retries reached. Infinite loop detected.")
+                            raise HandledOrchestratorError("Max AL retries reached. Infinite loop detected.")
 
                         logger.info("Exploration detected uncertainty. Triggering AL.")
 
@@ -221,24 +225,20 @@ class ActiveLearningOrchestrator:
                 error_counter = 0
 
             except Exception as e:
+                # If it's a HandledOrchestratorError, re-raise it so the caller can handle or the loop exits
+                if isinstance(e, HandledOrchestratorError):
+                    raise e
+
                 error_counter += 1
                 logger.exception(f"An error occurred in iteration {iteration}: {e}")
                 if error_counter < MAX_CONSECUTIVE_ERRORS:
                     logger.info(f"Retrying... (Error count: {error_counter})")
-                    # Decrement iteration so we retry the same iteration number if appropriate?
-                    # The prompt says: "If error_counter < MAX_CONSECUTIVE_ERRORS, log 'Retrying...' and continue."
-                    # It doesn't explicitly say to decrement iteration. However, if we just continue, iteration will increment at top of loop.
-                    # This might be desired (move to next attempt) or not.
-                    # Given the loop structure `while True: iteration += 1`, if we `continue`, we increment iteration.
-                    # If we failed to save state, or failed exploration, maybe we should retry same iteration logic?
-                    # But iteration number is just a counter.
-                    # If `save` failed, we loop back, `iteration` increments, we try to save again.
-                    # If `explore` failed, we loop back, `iteration` increments.
-                    # This seems acceptable for a "retry loop".
                     continue
                 else:
                     logger.error("Max errors reached")
-                    break
+                    # Break loop or raise?
+                    # Raising allows the caller (test) to see failure.
+                    raise RuntimeError("Max consecutive errors reached in Orchestrator") from e
 
     def _find_latest_restart(self, iteration: int, work_root: Path, max_search: int = 5) -> Optional[Path]:
         for i in range(1, max_search + 1):
