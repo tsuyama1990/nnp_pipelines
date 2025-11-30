@@ -1,9 +1,22 @@
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+class OrchestratorState(BaseModel):
+    iteration: int = 0
+    current_potential: Optional[str] = None
+    current_asi: Optional[str] = None
+    current_structure: Optional[str] = None
+    is_restart: bool = False
+    al_consecutive_counter: int = 0
+
+    class Config:
+        extra = "allow"
 
 class StateManager:
     """Manages the persistence of the orchestrator state."""
@@ -13,26 +26,34 @@ class StateManager:
         self.state_file = data_dir / "orchestrator_state.json"
 
     def save(self, state: Dict[str, Any]) -> None:
-        """Save the current state to a JSON file."""
+        """Save the current state to a JSON file using atomic write."""
+        # Validate with Pydantic (will raise ValidationError if invalid)
+        model = OrchestratorState(**state)
+
+        # Atomic write pattern
+        temp_file = self.state_file.with_suffix(".tmp")
         try:
-            with open(self.state_file, 'w') as f:
-                json.dump(state, f, indent=4)
+            with open(temp_file, 'w') as f:
+                f.write(model.model_dump_json(indent=4))
+                f.flush()
+                os.fsync(f.fileno())
+
+            os.replace(temp_file, self.state_file)
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
+            raise
 
     def load(self) -> Dict[str, Any]:
         """Load the state from a JSON file."""
         if self.state_file.exists():
             try:
                 with open(self.state_file, 'r') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                # Validate
+                model = OrchestratorState(**data)
+                return model.model_dump()
             except Exception as e:
                 logger.error(f"Failed to load state: {e}")
-        return {
-            "iteration": 0,
-            "current_potential": None,
-            "current_asi": None,
-            "current_structure": None,
-            "is_restart": False,
-            "al_consecutive_counter": 0
-        }
+
+        # Return default state if load fails or file doesn't exist
+        return OrchestratorState().model_dump()
