@@ -1,6 +1,6 @@
 
 import pytest
-from src.core.config import Config, LJParams, MDParams, MetaConfig
+from shared.core.config import Config, LJParams, MDParams, MetaConfig
 from ase.data import covalent_radii, atomic_numbers
 from pathlib import Path
 

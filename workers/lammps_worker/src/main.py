@@ -15,6 +15,7 @@ from shared.core.interfaces import KMCEngine
 import pickle
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def run_md(args, config):
     lj_dict = asdict(config.lj_params)
@@ -31,7 +32,7 @@ def run_md(args, config):
         input_structure=args.structure,
         is_restart=args.restart
     )
-    print(f"Simulation Result: {result.name}")
+    logger.info(f"Simulation Result: {result.name}")
 
 def run_small_cell(args, config):
     large_atoms = read(args.structure)
@@ -60,7 +61,7 @@ def run_small_cell(args, config):
     )
 
     write(args.output, small_atoms)
-    print(f"Small cell written to {args.output}")
+    logger.info(f"Small cell written to {args.output}")
 
 def run_kmc(args, config):
     # e0_dict needs to be loaded?
@@ -89,7 +90,7 @@ def run_kmc(args, config):
     with open(args.output, "wb") as f:
         pickle.dump(result, f)
 
-    print(f"KMC result written to {args.output}")
+    logger.info(f"KMC result written to {args.output}")
 
 def main():
     parser = argparse.ArgumentParser(description="LAMMPS Worker")
@@ -136,7 +137,7 @@ def main():
             run_kmc(args, config)
 
     except Exception as e:
-        print(f"LAMMPS Worker failed: {e}")
+        logger.error(f"LAMMPS Worker failed: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

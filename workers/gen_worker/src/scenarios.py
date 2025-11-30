@@ -97,7 +97,7 @@ class SurfaceGenerator(BaseScenario):
                 surf.center(vacuum=vacuum, axis=2)
                 structures.append(surf)
             except Exception as e:
-                print(f"Surface generation failed for {element} {hkl}: {e}")
+                logging.error(f"Surface generation failed for {element} {hkl}: {e}", exc_info=True)
                 continue
         return structures
 
@@ -164,7 +164,7 @@ class RandomScenario(BaseScenario):
             gen = RandomStructureGenerator(elements=elements, max_atoms=max_atoms)
             return gen.generate(n_structures)
         except ImportError:
-            print("PyXtal not available.")
+            logging.error("PyXtal not available.", exc_info=True)
             return []
 
 class RandomSymmetryScenario(BaseScenario):
@@ -172,7 +172,7 @@ class RandomSymmetryScenario(BaseScenario):
 
     def generate(self) -> List[Atoms]:
         if not PYXTAL_AVAILABLE:
-            print("PyXtal not available. Skipping RandomSymmetryScenario.")
+            logging.warning("PyXtal not available. Skipping RandomSymmetryScenario.")
             return []
 
         elements = self.config.get("elements", [])
@@ -192,7 +192,7 @@ class RandomSymmetryScenario(BaseScenario):
             num_ions_fixed = list(composition.values())
 
         if not composition and not elements:
-             print("No elements provided for RandomSymmetryScenario.")
+             logging.error("No elements provided for RandomSymmetryScenario.")
              return []
 
         # Parse space group range once
@@ -233,7 +233,7 @@ class RandomSymmetryScenario(BaseScenario):
                 continue
 
         if len(generated_structures) < num_structures:
-            print(f"Warning: Only generated {len(generated_structures)}/{num_structures} structures after {attempts} attempts.")
+            logging.warning(f"Only generated {len(generated_structures)}/{num_structures} structures after {attempts} attempts.")
 
         return generated_structures
 
