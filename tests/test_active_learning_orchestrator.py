@@ -91,44 +91,42 @@ def test_orchestrator_initial_asi_generation(mock_read, mock_exists, mock_mkdir,
     )
 
     # Mocks
-    md_engine = MagicMock(spec=MDEngine)
-    kmc_engine = MagicMock()
-    sampler = MagicMock()
-    generator = MagicMock(spec=StructureGenerator)
-    labeler = MagicMock(spec=Labeler)
-    trainer = MagicMock(spec=Trainer)
+    al_service = MagicMock()
+    explorer = MagicMock()
+    state_manager = MagicMock()
 
-    # Simulate loop breaking to avoid infinite loop
-    md_engine.run.side_effect = [SimulationState.COMPLETED]
+    # Need to setup state_manager mock to return dict
+    state_manager.load.return_value = {"iteration": 0, "current_potential": None, "current_asi": None}
 
     # Mock Path.exists logic
     mock_exists.return_value = True
 
     orch = ActiveLearningOrchestrator(
-        config, md_engine, kmc_engine, sampler, generator, labeler, trainer
+        config, al_service, explorer, state_manager
     )
-
-    # Mock _load_state to return empty dict AND iteration 0.
-    # The new orchestrator logic expects _load_state to return a dict.
-    # If it returns {}, 'iteration' lookup will use default or fail.
-    # In my new implementation: state = self._load_state(data_root)
-    # iteration = state["iteration"] <-- this assumes "iteration" exists if _load_state follows contract
-    # But _load_state implementation returns {"iteration": 0, ...} if file not found.
-    # So if we mock it, we must mock it to return that default structure.
-    orch._load_state = MagicMock(return_value={"iteration": 0, "current_potential": None, "current_asi": None})
 
     # Mocking resolve_path to return dummy paths
     orch._resolve_path = MagicMock(side_effect=lambda x, y: Path(x))
 
-    # Mock trainer.update_active_set
-    trainer.update_active_set.return_value = "generated.asi"
+    # Mock trainer.update_active_set (part of al_service)
+    al_service.trainer.update_active_set.return_value = "generated.asi"
 
-    # Run
+    # We must NOT suppress exceptions here. The loop runs indefinitely if everything works.
+    # To test 'run' without infinite loop, we must break it.
+    # We can make explorer.explore return FAILED or AL logic break.
+
+    # Let's verify `run` by breaking loop via exception, BUT we want to verify initial asi generation.
+    # The generation happens BEFORE the loop.
+
+    # Mock explorer to raise exception to break loop
+    explorer.explore.side_effect = RuntimeError("Break loop")
+
     try:
         orch.run()
-    except Exception:
-        pass # Expected since we mocked things loosely
+    except RuntimeError as e:
+        if str(e) != "Break loop":
+            raise
 
     # Verify update_active_set called
     # With iteration=0 and current_asi=None and initial_dataset_path set, it SHOULD be called.
-    trainer.update_active_set.assert_called_once_with("data.pckl", "pot.yaml")
+    al_service.trainer.update_active_set.assert_called_once_with("data.pckl", "pot.yaml")

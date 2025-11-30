@@ -113,6 +113,9 @@ class ActiveLearningOrchestrator:
                  logger.error(f"Failed to generate initial active set: {e}")
                  return
 
+        error_counter = 0
+        MAX_CONSECUTIVE_ERRORS = 5
+
         while True:
             iteration += 1
 
@@ -204,14 +207,38 @@ class ActiveLearningOrchestrator:
                 al_consecutive_counter = 0
 
                 if exploration_result.final_structure:
-                    current_structure = exploration_result.final_structure
+                    # Define restart file path
+                    restart_path = work_dir / "final_structure.xyz"
+                    # Save Atoms object to file
+                    write(str(restart_path), exploration_result.final_structure)
+                    # Update state variable with the PATH string
+                    current_structure = str(restart_path.resolve())
 
                 # Update restart state based on explorer metadata
                 is_restart = exploration_result.metadata.get("is_restart", False)
 
+                # Reset error counter on successful iteration
+                error_counter = 0
+
             except Exception as e:
+                error_counter += 1
                 logger.exception(f"An error occurred in iteration {iteration}: {e}")
-                break
+                if error_counter < MAX_CONSECUTIVE_ERRORS:
+                    logger.info(f"Retrying... (Error count: {error_counter})")
+                    # Decrement iteration so we retry the same iteration number if appropriate?
+                    # The prompt says: "If error_counter < MAX_CONSECUTIVE_ERRORS, log 'Retrying...' and continue."
+                    # It doesn't explicitly say to decrement iteration. However, if we just continue, iteration will increment at top of loop.
+                    # This might be desired (move to next attempt) or not.
+                    # Given the loop structure `while True: iteration += 1`, if we `continue`, we increment iteration.
+                    # If we failed to save state, or failed exploration, maybe we should retry same iteration logic?
+                    # But iteration number is just a counter.
+                    # If `save` failed, we loop back, `iteration` increments, we try to save again.
+                    # If `explore` failed, we loop back, `iteration` increments.
+                    # This seems acceptable for a "retry loop".
+                    continue
+                else:
+                    logger.error("Max errors reached")
+                    break
 
     def _find_latest_restart(self, iteration: int, work_root: Path, max_search: int = 5) -> Optional[Path]:
         for i in range(1, max_search + 1):

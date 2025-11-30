@@ -8,6 +8,7 @@ from pathlib import Path
 from ase import Atoms
 from shared.core.config import Config
 from src.main import main
+# Removed ActiveLearningOrchestrator patch as per plan
 from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
 from shared.utils.logger import CSVLogger
 
@@ -74,20 +75,31 @@ class TestIntegrationPhase3(unittest.TestCase):
 
     @patch("src.main.ComponentFactory")
     @patch("src.main.SeedGenerator")
-    @patch("src.main.ActiveLearningOrchestrator")
-    def test_main_runs_phase1_if_potential_missing(self, mock_orchestrator, mock_seed_gen, mock_factory_cls):
+    # Removed @patch("src.main.ActiveLearningOrchestrator") - we'll let it be instantiated or mocking it differently if needed,
+    # but the instruction said "Remove @patch("src.main.ActiveLearningOrchestrator")".
+    # However, test_main_runs_phase1_if_potential_missing uses mock_orchestrator argument.
+    # If I remove the patch, I must remove the argument too.
+    # Also src.main instantiates ActiveLearningOrchestrator. If I don't patch it, it will try to run real logic, which requires real dependencies.
+    # But ComponentFactory is patched. ComponentFactory.create_active_learning_orchestrator returns what?
+    # src.main calls `factory.create_active_learning_orchestrator(...)`.
+    # So if I mock ComponentFactory, I can control what orchestrator is returned without patching the class itself.
+    # The prompt says "Cleanup Bad Tests ... In tests/test_integration.py: Remove @patch("src.main.ActiveLearningOrchestrator")."
+    # This implies relying on Dependency Injection or factory mocking is better than patching the class.
+    def test_main_runs_phase1_if_potential_missing(self, mock_seed_gen, mock_factory_cls):
         """Test that Phase 1 is triggered if initial potential is missing."""
         # potential.yace does not exist in self.test_dir
 
         # Mock Factory
         mock_factory = mock_factory_cls.return_value
-        # We don't strictly need to set return values for create_* as orchestrator is mocked too
-        # but good practice
+
+        # Setup the mock orchestrator returned by factory
+        mock_orch_instance = MagicMock()
+        mock_factory.create_active_learning_orchestrator.return_value = mock_orch_instance
+
         mock_factory.create_md_engine.return_value = MagicMock()
 
         # Create mock instances
         mock_seed_instance = mock_seed_gen.return_value
-        mock_orch_instance = mock_orchestrator.return_value
 
         # We need to simulate the seed generator actually creating the file
         # so that Phase 2 continues (or main copies it).
@@ -112,16 +124,20 @@ class TestIntegrationPhase3(unittest.TestCase):
         mock_seed_instance.run.assert_called_once()
 
         # Check Phase 2 was called
-        mock_orchestrator.assert_called_once()
+        # mock_orchestrator.assert_called_once() # We removed the patch, so we can't check the class call.
+        # But we can check if the instance method was called.
         mock_orch_instance.run.assert_called_once()
 
     @patch("src.main.ComponentFactory")
     @patch("src.main.SeedGenerator")
-    @patch("src.main.ActiveLearningOrchestrator")
-    def test_main_skips_phase1_if_potential_exists(self, mock_orchestrator, mock_seed_gen, mock_factory_cls):
+    # Removed @patch("src.main.ActiveLearningOrchestrator")
+    def test_main_skips_phase1_if_potential_exists(self, mock_seed_gen, mock_factory_cls):
         """Test that Phase 1 is skipped if initial potential exists."""
         # Mock Factory
         mock_factory = mock_factory_cls.return_value
+
+        mock_orch_instance = MagicMock()
+        mock_factory.create_active_learning_orchestrator.return_value = mock_orch_instance
 
         import os
         current_dir = os.getcwd()
@@ -139,48 +155,7 @@ class TestIntegrationPhase3(unittest.TestCase):
         mock_seed_gen.assert_not_called()
 
         # Check Phase 2 was called
-        mock_orchestrator.assert_called_once()
-
-    def test_parallel_labeling(self):
-        """Test the parallel labeling logic in Orchestrator."""
-        # Setup mocks for dependencies
-        config = Config.from_yaml(self.config_path)
-        mock_md = MagicMock()
-        mock_kmc = MagicMock()
-        mock_sampler = MagicMock()
-        mock_generator = MagicMock()
-        mock_labeler = MagicMock()
-        mock_trainer = MagicMock()
-
-        # Setup mock behavior
-        atoms = Atoms("Al", positions=[[0,0,0]])
-        mock_labeler.label.return_value = atoms
-
-        orchestrator = ActiveLearningOrchestrator(
-            config, mock_md, mock_kmc, mock_sampler, mock_generator, mock_labeler, mock_trainer
-        )
-
-        # Create a list of clusters
-        clusters = [atoms.copy() for _ in range(4)]
-
-        # Test with ProcessPoolExecutor mocked to avoid pickling issues and ensure we are testing logic
-        with patch("src.workflows.orchestrator.ProcessPoolExecutor") as MockExecutor:
-            instance = MockExecutor.return_value
-            instance.__enter__.return_value = instance
-
-            # Mock submit to return a Future-like object that returns the input atom (labeled)
-            from concurrent.futures import Future
-            def side_effect_submit(fn, labeler, atom):
-                f = Future()
-                f.set_result(atom) # In real life fn returns atom, here we assume it worked
-                return f
-
-            instance.submit.side_effect = side_effect_submit
-
-            results = orchestrator._label_clusters_parallel(clusters)
-
-            self.assertEqual(len(results), 4)
-            MockExecutor.assert_called_with(max_workers=2)
+        mock_orch_instance.run.assert_called_once()
 
     def test_csv_logger(self):
         """Test that CSVLogger writes correctly."""
