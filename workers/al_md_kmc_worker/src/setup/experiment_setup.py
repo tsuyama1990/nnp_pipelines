@@ -152,7 +152,12 @@ class ExperimentSetup:
         al_config = {
             "exploration": self.root_config.get("exploration", {}),
             "al_params": self.root_config.get("al_params", {}),
-            "kmc_params": self.root_config.get("kmc_params", {})
+            "kmc_params": self.root_config.get("kmc_params", {}),
+            # Required by Config model for full validation even if used in other steps
+            "md_params": self.root_config.get("md_params", {}),
+            "training_params": self.root_config.get("training_params", {}),
+            "ace_model": self.root_config.get("ace_model", {}),
+            "dft_params": self.root_config.get("dft_params", {})
         }
         self._save_yaml(al_config, self.configs_dir / "07_active_learning.yaml")
 

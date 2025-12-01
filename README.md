@@ -1,130 +1,99 @@
 # ACE Active Carver
 
-An automated Active Learning system for materials science, designed to train Atomic Cluster Expansion (ACE) potentials using a Hybrid MD-kMC workflow. The system autonomously explores phase space, identifies high-uncertainty configurations, and retrains the potential using First-Principles (DFT) data.
+ **ACE Active Carver** is a modular, Dockerized Active Learning (AL) pipeline for constructing Machine Learning Interatomic Potentials (MLIPs) using the Atomic Cluster Expansion (ACE) framework. It integrates **MACE** (for foundation model-based structure generation), **Pacemaker** (for ACE training), **LAMMPS** (for MD/KMC exploration), and **Quantum ESPRESSO** (for DFT labeling).
 
-## Architecture
+ ---
 
-This project follows a **Micro-kernel Architecture**:
+ ## 🏗 Architecture
 
-*   **Orchestrator (Host)**: A lightweight Python application that manages the active learning loop, state, and decision logic. It does not perform heavy computations itself.
-*   **Workers (Docker Containers)**: Specialized, isolated environments for heavy computational tasks. The Orchestrator invokes these workers via `docker run`.
-    *   `gen_worker`: Generates candidate structures using MACE (Foundational ML Force Field) and PyXtal (Symmetry-based generation).
-    *   `dft_worker`: Performs First-Principles calculations (Quantum Espresso) to label data.
-    *   `pace_worker`: Trains ACE potentials and performs uncertainty-based sampling (Pacemaker).
-    *   `lammps_worker`: Runs Molecular Dynamics (MD) and Kinetic Monte Carlo (kMC) simulations (LAMMPS).
-*   **Shared Data**: Data is exchanged via a shared volume mounted at `./data` on the host and `/data` inside containers.
+ The project follows a **Micro-kernel Architecture**:
+ *   **Orchestrator:** A lightweight Python core (in `workers/al_md_kmc_worker`) that manages the AL loop, state, and task delegation.
+ *   **Workers:** Docker containers specialized for heavy computational tasks.
+     *   `gen_worker`: Structure generation using PyXtal and MACE-MP relaxation.
+     *   `lammps_worker`: Molecular Dynamics (MD) and Kinetic Monte Carlo (KMC) simulations.
+     *   `dft_worker`: DFT calculations (Quantum ESPRESSO) for labeling.
+     *   `pace_worker`: Active Learning sampling (MaxVol) and Potential Training (Pacemaker).
 
-## Prerequisites
+ ---
 
-*   **Linux OS** (Ubuntu/Debian recommended)
-*   **Docker Engine** (with non-root user access configured)
-*   **NVIDIA Drivers** & **NVIDIA Container Toolkit** (required for GPU acceleration in `pace_worker` and `gen_worker`)
-*   **uv** (Python package manager)
+ ## 🚀 Getting Started
 
-## Installation
+ ### Prerequisites
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-org/ace-active-carver.git
-    cd ace-active-carver
-    ```
+ Ensure you have the following installed:
+ *   [Docker](https://docs.docker.com/get-docker/)
+ *   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (for GPU support)
+ *   [uv](https://github.com/astral-sh/uv) (for fast Python dependency management)
 
-2.  **Install dependencies using `uv`:**
-    ```bash
-    # Install uv if not present
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+ You can verify your environment using the provided script:
 
-    # Sync dependencies
-    uv sync
-    ```
+ ```bash
+ ./check_env.sh
+ ```
 
-3.  **Build Worker Images:**
-    Each worker has its own `Dockerfile` in `workers/<name>`. You must build them before running the orchestrator.
-    ```bash
-    # Example build script usage (if available) or manual build:
-    docker build -t dft_worker:latest -f workers/dft_worker/Dockerfile .
-    docker build -t gen_worker:latest -f workers/gen_worker/Dockerfile .
-    docker build -t pace_worker:latest -f workers/pace_worker/Dockerfile .
-    docker build -t lammps_worker:latest -f workers/lammps_worker/Dockerfile .
-    ```
+ ### Installation
 
-## 🚀 Usage Workflow
+ 1.  Clone the repository:
+     ```bash
+     git clone https://github.com/your-org/ace-active-carver.git
+     cd ace-active-carver
+     ```
 
-本パイプラインは、再現性と設定管理のために `setup_experiment.py` を唯一のエントリーポイントとして設計されています。
-直接 `orchestrator/main.py` を実行することは推奨されません。
+ 2.  Build the Docker images:
+     ```bash
+     make build
+     ```
 
-### 1. Configuration (設定)
-実験の設定は `config.yaml` で管理します。
-目的に応じて設定ファイルをコピー・編集してください。
+ ### Running an Experiment
 
-```bash
-cp config.yaml my_experiment_config.yaml
-# vim my_experiment_config.yaml
-```
+ 1.  **Configure:** Edit `config.yaml` to define your system (elements, temperature, etc.).
 
-### 2\. Initialize & Run Experiment (実行)
+ 2.  **Start:** Run the setup script.
+     ```bash
+     python setup_experiment.py --config config.yaml --name my_experiment
+     ```
+     This creates an experiment directory structure in `experiment_my_experiment/`.
 
-`setup_experiment.py` を介して実験を開始します。このスクリプトは以下の処理を自動化します：
+ 3.  **Execute:**
+     The setup script generates a `run_pipeline.sh` inside `experiment_my_experiment/configs/`. You can uncomment the relevant steps in that script and run it, or rely on the orchestration if enabled.
 
-1.  **Workspace作成:** ユニークな実験IDを持つディレクトリ（`experiments/YYYYMMDD_HHMMSS_Name`）を作成。
-2.  **Config凍結:** 使用した設定ファイルを実験ディレクトリ内にコピー（再現性の担保）。
-3.  **初期化:** Seed生成、初期ポテンシャルの準備。
-4.  **パイプライン起動:** `ActiveLearningOrchestrator` のプロセスを開始。
+ ### Development & Testing
 
-#### 基本コマンド
+ The project includes a comprehensive test suite.
 
-```bash
-# デフォルト設定で実行
-uv run setup_experiment.py
+ *   **Run Unit Tests:**
+     ```bash
+     make test
+     ```
+ *   **Run Integration Tests (Mocked Docker):**
+     ```bash
+     make test-integration
+     ```
+ *   **Clean Environment:**
+     ```bash
+     make clean
+     ```
 
-# 設定ファイルを指定して実行（推奨）
-uv run setup_experiment.py --config my_experiment_config.yaml
+ ---
 
-# 実験名（タグ）を付けて実行
-uv run setup_experiment.py --config config.yaml --name "al_ni_system_v1"
-```
+ ## 📂 Directory Structure
 
-### 3\. Directory Structure (出力構造)
+ ```text
+ .
+ ├── config.yaml             # Main experiment configuration
+ ├── config_meta.yaml        # Environment-specific settings (Docker tags, commands)
+ ├── setup_experiment.py     # Entry point script
+ ├── docker-compose.yml      # Orchestration definition
+ ├── Makefile                # Build/Run shortcuts
+ ├── shared/                 # Common Python code (Config, Utils, Potentials)
+ ├── workers/                # Source code for micro-services
+ │   ├── al_md_kmc_worker/   # Orchestrator & LAMMPS
+ │   ├── dft_worker/         # DFT Labeling
+ │   ├── gen_worker/         # Structure Generation
+ │   └── pace_worker/        # Training & Sampling
+ └── tests/                  # Unit and Integration tests
+ ```
 
-実行後、以下のディレクトリ構造が自動生成されます。
+ ## ⚖️ License
 
-```text
-work/
-└── 07_active_learning/          # アクティブラーニングのメイン作業領域
-    ├── experiment_state.json    # 中断再開用のステートファイル
-    ├── config_snapshot.yaml     # 実行時の設定（凍結）
-    ├── iteration_1/             # イテレーションごとの計算結果
-    │   ├── candidate.xyz
-    │   ├── train.xyz
-    │   └── potential_v1.yace
-    └── logs/
-        └── experiment.log
-```
-
-### 4\. Resume / Restart (中断と再開)
-
-実験が中断した場合、生成された実験ディレクトリを指定して再開します。
-
-```bash
-# 特定の実験ディレクトリから再開する場合
-uv run setup_experiment.py --resume work/07_active_learning/ --iteration 5
-```
-
-## Directory Structure
-
-*   `orchestrator/`: Python code for the control logic.
-    *   `src/setup/`: Modules for experiment initialization.
-    *   `src/wrappers/`: Docker wrappers that construct CLI commands for workers.
-    *   `src/services/`: Business logic for MD, KMC, and Active Learning.
-    *   `src/utils/`: Utility classes, including parallel execution helpers.
-*   `workers/`: Source code and Dockerfiles for computational workers.
-    *   `dft_worker/`: Quantum Espresso wrapper.
-    *   `gen_worker/`: MACE structure generation and PyXtal integration.
-    *   `pace_worker/`: Pacemaker training and sampling.
-    *   `lammps_worker/`: LAMMPS MD/KMC engine.
-*   `shared/`: Common Python code (Config, Data Structures) shared between Host and Workers.
-*   `data/`: Runtime data directory (mounted to containers).
-
-## License
-
-[Insert License Here]
+ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
