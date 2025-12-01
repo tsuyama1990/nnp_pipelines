@@ -31,9 +31,10 @@ logger = logging.getLogger(__name__)
 
 class PipelineArgs:
     """Helper class to mimic argparse arguments needed by run_active_learning."""
-    def __init__(self, config: str, meta_config: str):
+    def __init__(self, config: str, meta_config: str, resume_iteration: Optional[int] = None):
         self.config = config
         self.meta_config = meta_config
+        self.resume_iteration = resume_iteration
 
 def ensure_meta_config(path: pathlib.Path):
     """
@@ -42,7 +43,7 @@ def ensure_meta_config(path: pathlib.Path):
     Docker image tags and execution commands.
     """
     if not path.exists():
-        logger.info(f"Meta config not found at {path}. Creating default template with Docker tags.")
+        logger.warning(f"Meta config not found at {path}. Creating default template with Docker tags. PLEASE REVIEW THIS FILE.")
         default_meta = {
             "execution": {
                 "mpirun_command": "mpirun -np 4"
@@ -52,7 +53,8 @@ def ensure_meta_config(path: pathlib.Path):
             },
             "dft": {
                 "command": "pw.x",
-                "pseudo_dir": "./pseudos"
+                "pseudo_dir": "./pseudos",
+                "sssp_json_path": "./sssp.json"
             },
             "docker": {
                 "pace_image": "pace_worker:latest",
@@ -109,15 +111,42 @@ def main():
         resume_path = pathlib.Path(args.resume).resolve()
         logger.info(f"Resuming experiment from: {resume_path}")
 
-        # Heuristic to find experiment root if user passes work/07_active_learning/
-        experiment_root = resume_path
-        if "work" in experiment_root.parts:
-            # Go up until we find the parent of 'work'
-            while experiment_root.name != "work" and experiment_root.parent != experiment_root:
-                 experiment_root = experiment_root.parent
-            experiment_root = experiment_root.parent # Parent of work/
+        # Strict validation of experiment root
+        # 1. Check if the path itself is the experiment root (should contain work/ and configs/)
+        # 2. Or if it's a subdirectory, warn the user to provide the root.
 
-        logger.info(f"Detected experiment root: {experiment_root}")
+        # We expect the resume path to be the experiment root (e.g., experiment_name/)
+        if not (resume_path / "work" / "07_active_learning").exists() and not (resume_path / "configs").exists():
+             logger.error(f"Invalid resume path: {resume_path}")
+             logger.error("Please provide the root directory of the experiment (containing 'work/' and 'configs/').")
+             sys.exit(1)
+
+        experiment_root = resume_path
+
+        # Validate State File
+        # State file is typically in work/07_active_learning/experiment_state.json OR work/experiment_state.json
+        # The orchestrator logic uses work/07_active_learning as the root for state.
+
+        # NOTE: State location depends on orchestrator implementation.
+        # Based on test_pipeline_e2e.py, it seems we expect it in `work/experiment_state.json` or `work/07_active_learning`.
+        # ActiveLearningOrchestrator.run sets work_root = Path("work/07_active_learning").
+        # StateManager default is "experiment_state.json" in CWD? No, it takes a path.
+
+        # Let's check the standard location
+        state_path = experiment_root / "work" / "07_active_learning" / "experiment_state.json"
+
+        if not state_path.exists():
+            # Try alternative location
+             state_path_alt = experiment_root / "work" / "experiment_state.json"
+             if state_path_alt.exists():
+                 state_path = state_path_alt
+             else:
+                 logger.error(f"Experiment state file not found at {state_path} or {state_path_alt}.")
+                 logger.error("Cannot resume without a valid state file.")
+                 sys.exit(1)
+
+        logger.info(f"Found experiment state at: {state_path}")
+        logger.info(f"Confirmed experiment root: {experiment_root}")
 
         # Locate configs
         config_path = experiment_root / "configs" / "07_active_learning.yaml"
@@ -133,7 +162,8 @@ def main():
         # Run Pipeline
         pipeline_args = PipelineArgs(
             config=str(config_path.relative_to(experiment_root)),
-            meta_config=str(meta_config_path.relative_to(experiment_root))
+            meta_config=str(meta_config_path.relative_to(experiment_root)),
+            resume_iteration=args.iteration
         )
         run_active_learning(pipeline_args)
 
