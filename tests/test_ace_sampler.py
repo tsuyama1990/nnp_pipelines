@@ -7,7 +7,7 @@ import sys
 # Mock pyace module before importing ACESampler
 sys.modules["pyace"] = MagicMock()
 
-from src.sampling.strategies.ace_sampler import ACESampler
+from workers.pace_worker.src.sampling.strategies.ace_sampler import ACESampler
 
 class TestACESampler(unittest.TestCase):
     def setUp(self):

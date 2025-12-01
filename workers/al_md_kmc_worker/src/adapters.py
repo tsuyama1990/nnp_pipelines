@@ -50,7 +50,7 @@ class DockerLabeler(Labeler):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_data_dir
+        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
 
     def label(self, structure: Atoms) -> Optional[Atoms]:
         input_name = get_unique_filename("label_input", ".xyz")
@@ -122,7 +122,7 @@ class DockerSampler(Sampler):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_data_dir
+        self.host_data_dir = wrapper.host_work_dir # Corrected to host_work_dir or handle absence
 
     def sample(self, **kwargs) -> List[Tuple[Atoms, int]]:
         candidates = kwargs.get("structures", []) # API changed in orchestrator call? Check orchestrator logic.
@@ -155,11 +155,11 @@ class DockerSampler(Sampler):
         return [(a, -1) for a in selected]
 
 class DockerStructureGenerator(StructureGenerator):
-    def __init__(self, wrapper: LammpsWorker, config_filename: str, meta_config_filename: str):
+    def __init__(self, wrapper: GenWorker, config_filename: str, meta_config_filename: str):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_data_dir
+        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
 
     def generate_cell(self, large_atoms: Atoms, center_id: int, potential_path: str) -> Atoms:
         input_name = get_unique_filename("large_structure", ".xyz")
@@ -184,7 +184,7 @@ class DockerKMCEngine(KMCEngine):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_data_dir
+        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
 
     def run_step(self, initial_atoms: Atoms, potential_path: str) -> KMCResult:
         input_name = get_unique_filename("kmc_input", ".xyz")
@@ -209,7 +209,7 @@ class DockerKMCEngine(KMCEngine):
 class DockerValidator(Validator):
     def __init__(self, wrapper: PaceWorker, config_filename: str, meta_config_filename: str):
         self.wrapper = wrapper
-        self.host_data_dir = wrapper.host_data_dir
+        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
 
     def validate(self, potential_path: str) -> Dict[str, Any]:
         pot_name = Path(potential_path).name
