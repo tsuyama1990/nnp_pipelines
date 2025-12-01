@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
-from src.labeling.strategies.delta_labeler import DeltaLabeler
+from strategies.delta_labeler import DeltaLabeler
+from shared.potentials.shifted_lj import ShiftedLennardJones
 
 class MockCalculator(Calculator):
     """Mock Calculator that returns fixed energy, forces and stress."""
@@ -57,7 +58,6 @@ def test_delta_labeling_real_lj():
     dft_forces = np.array([[0, 0, 0.5], [0, 0, -0.5]])
     mock_dft = MockCalculator(energy=dft_energy, forces=dft_forces)
 
-    from src.labeling.calculators.shifted_lj import ShiftedLennardJones
     lj_calc = ShiftedLennardJones(epsilon=1.0, sigma=1.0, rc=2.5)
 
     # Calculate expected LJ manually to verify
@@ -76,7 +76,9 @@ def test_delta_labeling_real_lj():
     expected_delta_f = dft_forces - f_lj_expected
     # mock_dft has 0 stress by default (from init)
     expected_delta_s = np.zeros(6) - s_lj_expected
-    expected_virial = expected_delta_s * atoms.get_volume()
+
+    # Correct virial calculation: virial = -stress * volume
+    expected_virial = -expected_delta_s * atoms.get_volume()
 
     np.testing.assert_allclose(labeled_atoms.info['energy'], expected_delta_e)
     np.testing.assert_allclose(labeled_atoms.arrays['forces'], expected_delta_f)
