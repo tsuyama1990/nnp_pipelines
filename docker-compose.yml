@@ -1,0 +1,42 @@
+services:
+  gen_worker:
+    build:
+      context: .
+      dockerfile: workers/gen_worker/Dockerfile
+    volumes:
+      - ./data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  dft_worker:
+    build:
+      context: .
+      dockerfile: workers/dft_worker/Dockerfile
+    volumes:
+      - ./data:/data
+
+  pace_worker:
+    build:
+      context: .
+      dockerfile: workers/pace_worker/Dockerfile
+    volumes:
+      - ./data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  lammps_worker:
+    build:
+      context: .
+      dockerfile: workers/al_md_kmc_worker/Dockerfile
+    volumes:
+      - ./data:/data
