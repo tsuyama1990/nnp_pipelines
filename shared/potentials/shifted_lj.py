@@ -3,7 +3,7 @@
 import numpy as np
 from typing import Optional, Dict, Any, Union
 from ase import Atoms
-from ase.calculators.calculator import Calculator, all_changes
+from ase.calculators.calculator import Calculator, all_changes, PropertyNotImplementedError
 from ase.neighborlist import NeighborList
 
 class ShiftedLennardJones(Calculator):
@@ -11,7 +11,7 @@ class ShiftedLennardJones(Calculator):
     Supports species-specific parameters and mixing rules.
     """
 
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self,
                  epsilon: Union[float, Dict[str, float]] = 1.0,
@@ -42,12 +42,16 @@ class ShiftedLennardJones(Calculator):
     ):
         """Calculate properties."""
         if properties is None:
-            properties = ['energy', 'forces']
+            properties = ['energy', 'forces', 'stress']
 
         super().calculate(atoms, properties, system_changes)
 
         # Reset results
-        self.results = {'energy': 0.0, 'forces': np.zeros((len(self.atoms), 3))}
+        self.results = {
+            'energy': 0.0,
+            'forces': np.zeros((len(self.atoms), 3)),
+            'stress': np.zeros(6)
+        }
 
         # Prepare parameters
         elements = self.atoms.get_chemical_symbols()
@@ -71,14 +75,15 @@ class ShiftedLennardJones(Calculator):
             return eps, sig
 
         # Use NeighborList for efficiency
-        # cutoffs: we need half of max cutoff? No, NeighborList takes cutoffs list.
-        # But we have a global cutoff rcut.
+        # NeighborList uses a list of cutoffs (radii). We use rcut/2 for all.
         cutoffs = [self.rcut / 2.0] * len(self.atoms)
         nl = NeighborList(cutoffs, self_interaction=False, bothways=True, skin=0.0)
         nl.update(self.atoms)
 
         energy = 0.0
         forces = np.zeros((len(self.atoms), 3))
+        # Virial stress tensor (Voigt notation or full tensor). We compute full tensor.
+        virial = np.zeros((3, 3))
 
         for i in range(len(self.atoms)):
             indices, offsets = nl.get_neighbors(i)
@@ -92,7 +97,7 @@ class ShiftedLennardJones(Calculator):
             vec_ij = pos_j - pos_i
             dists_sq = np.sum(vec_ij**2, axis=1)
 
-            # Filter by rcut explicitly (NeighborList uses skin, so might include slightly larger)
+            # Filter by rcut explicitly
             mask = dists_sq < (self.rcut**2)
             if not np.any(mask):
                 continue
@@ -108,8 +113,6 @@ class ShiftedLennardJones(Calculator):
                 eps_j, sig_j = get_params(j_idx)
 
                 # Mixing rules
-                # sigma_ij = (sigma_i + sigma_j) / 2
-                # epsilon_ij = sqrt(epsilon_i * epsilon_j)
                 sig_ij = (sig_i + sig_j) / 2.0
                 eps_ij = np.sqrt(eps_i * eps_j)
 
@@ -120,49 +123,23 @@ class ShiftedLennardJones(Calculator):
                 # Energy: 4*eps * (r12 - r6)
                 e_pair = 4.0 * eps_ij * (r12 - r6)
 
-                # Force magnitude (derivative of potential w.r.t r)
-                # F = -dV/dr
-                # V = 4*eps*(s^12*r^-12 - s^6*r^-6)
-                # dV/dr = 4*eps*(-12*s^12*r^-13 + 6*s^6*r^-7)
-                #       = (24*eps/r) * (s^6/r^6 - 2*s^12/r^12)
-                #       = (24*eps/r2) * (r6 - 2*r12) * r ? No
-                # Let's derive simpler:
-                # F_mag = (24 * eps / r2) * (2 * (sig/r)^12 - (sig/r)^6)
-                # F_vec = F_mag * (vec_ij / r) ?
-                # F_vec = -dV/dr * (vec_ij / r)
-                #       = - (24*eps/r) * (s^6/r^6 - 2*s^12/r^12) * (vec_ij/r)
-                #       = (24*eps/r^2) * (2*s^12/r^12 - s^6/r^6) * vec_ij
-                #       = (24*eps/r^2) * (2*r12 - r6) * vec_ij
+                # Force magnitude: F = -dV/dr.
+                # F_vec_i (force on i) = -dV/dr * (vec_ij / r) = - (24*eps/r^2)*(2*r12 - r6) * vec_ij
+                f_scalar = (24.0 * eps_ij / r2) * (2.0 * r12 - r6)
+                f_vec_i = - f_scalar * vec_ij[k]
 
-                f_factor = (24.0 * eps_ij / r2) * (2.0 * r12 - r6)
-                f_vec = f_factor * vec_ij[k] # Force on i due to j?
+                forces[i] += f_vec_i
 
-                # Force on i is F_ij (force exerted by j on i).
-                # Potential V depends on |r_i - r_j|.
-                # F_i = - gradient_i V
-                # gradient_i |r_i - r_j| = (r_i - r_j) / |r_i - r_j| = -vec_ij / r
-                # So F_i = - dV/dr * (-vec_ij/r) = (dV/dr) * (vec_ij/r)
-                # dV/dr = (24*eps/r) * (r6 - 2*r12)  <-- wait, sign
-                # V(x) = x^-12 - x^-6. V'(x) = -12x^-13 + 6x^-7
-                # dV/dr = 4*eps * (-12/r * r12 + 6/r * r6) = 24*eps/r * (0.5*r6 - r12)
-                # F_i = (24*eps/r2) * (0.5*r6 - r12) * vec_ij
-                #     = (24*eps/r2) * (r6 - 2*r12) * (-0.5) * vec_ij ? No.
+                # Virial contribution.
+                # W = sum_pairs r_ij \otimes F_ij.
+                # F_ij is force on i due to j (f_vec_i).
+                # r_ij is vector from j to i = -vec_ij[k].
+                # Contribution = (-vec_ij[k]) \otimes f_vec_i
+                #              = (-vec_ij[k]) \otimes (-f_scalar * vec_ij[k])
+                #              = f_scalar * (vec_ij[k] \otimes vec_ij[k])
 
-                # Correct formula: F = 24*eps/r^2 * (2*(sig/r)^12 - (sig/r)^6) * vec_ij
-                # This vector points from j to i (repulsive).
-                # vec_ij = r_j - r_i. Points from i to j.
-                # So if atoms are too close, F should push i away from j (opposite to vec_ij).
-                # (2*r12 - r6) is positive for small r.
-                # So F matches vec_ij (towards j)? No that would be attractive.
-                # So we need negative sign.
-
-                # Let's check ASE implementation or standard.
-                # Force on atom i: F_i = sum_j F_ij
-                # F_ij = 24 eps (2(sigma/r)^12 - (sigma/r)^6) \frac{r_i - r_j}{r^2}
-                # r_i - r_j = -vec_ij.
-                # So F_vec = - (24 * eps / r2) * (2 * r12 - r6) * vec_ij[k]
-
-                forces[i] += - (24.0 * eps_ij / r2) * (2.0 * r12 - r6) * vec_ij[k]
+                # Since we visit each pair twice (bothways=True), we take half contribution per visit.
+                virial += 0.5 * f_scalar * np.outer(vec_ij[k], vec_ij[k])
 
                 # Shift
                 if self.shift_energy:
@@ -173,12 +150,21 @@ class ShiftedLennardJones(Calculator):
                 energy += e_pair
 
         # NeighborList double counts (bothways=True), so we divide energy by 2.
-        # Forces are accumulated correctly because we iterate over all i.
-        # But wait, if bothways=True, for pair (i,j) we visit i then j is neighbor, AND visit j then i is neighbor.
-        # Forces on i from j are added when we visit i.
-        # Forces on j from i are added when we visit j.
-        # So forces are fine.
-        # Energy is calculated twice per pair.
-
         self.results['energy'] = energy / 2.0
         self.results['forces'] = forces
+
+        # Stress (Voigt) from Virial
+        # ASE sign convention: stress = -virial / volume.
+
+        vol = self.atoms.get_volume()
+        stress_tensor = -virial / vol
+
+        # Convert to Voigt: xx, yy, zz, yz, xz, xy
+        self.results['stress'] = np.array([
+            stress_tensor[0, 0],
+            stress_tensor[1, 1],
+            stress_tensor[2, 2],
+            stress_tensor[1, 2],
+            stress_tensor[0, 2],
+            stress_tensor[0, 1]
+        ])
