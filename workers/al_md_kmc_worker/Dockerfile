@@ -19,6 +19,6 @@ COPY shared /app/shared
 ENV PYTHONPATH=/app
 
 # Copy Worker Source
-COPY workers/lammps_worker/src /app/src
+COPY workers/al_md_kmc_worker/src /app/src
 
 WORKDIR /data
