@@ -11,10 +11,12 @@ This worker is responsible for **training** Atomic Cluster Expansion (ACE) poten
 
 ## Docker Image
 
-**Build Command:**
+The recommended way to build and run this worker is via the root `docker-compose.yml`.
+
+**Build:**
 ```bash
 # From repository root
-docker build -t pace_worker:latest -f workers/pace_worker/Dockerfile .
+docker-compose build pace_worker
 ```
 
 *Note: This worker requires GPU support (TensorFlow) for efficient training.*
