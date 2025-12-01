@@ -10,13 +10,16 @@ This worker runs Molecular Dynamics (MD) and Kinetic Monte Carlo (kMC) simulatio
 
 ## Docker Image
 
-The image must be built with a custom LAMMPS version that includes `ML-PACE`.
+The recommended way to build and run this worker is via the root `docker-compose.yml`.
 
-**Build Command:**
+**Build:**
 ```bash
 # From repository root
-docker build -t lammps_worker:latest -f workers/lammps_worker/Dockerfile .
+docker-compose build lammps_worker
 ```
+
+The image must be built with a custom LAMMPS version that includes `ML-PACE`.
+*Current Status:* The default image relies on `lammps/lammps:stable`. You may need to rebuild it with PACE support enabled if the official image lacks it.
 
 ## Usage
 

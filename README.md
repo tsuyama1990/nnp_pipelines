@@ -41,21 +41,43 @@
 
  2.  Build the Docker images:
      ```bash
+     # Using make (if available)
      make build
+
+     # Or directly with Docker Compose
+     docker-compose build
+     docker-compose up -d
      ```
+
+ ### Quickstart
+
+ See [quickstart/README.md](quickstart/README.md) for a step-by-step guide to running a demo experiment.
 
  ### Running an Experiment
 
  1.  **Configure:** Edit `config.yaml` to define your system (elements, temperature, etc.).
 
- 2.  **Start:** Run the setup script.
+ 2.  **Validate:** Ensure your configuration is correct.
      ```bash
-     python setup_experiment.py --config config.yaml --name my_experiment
+     python3 validate_config.py config.yaml
      ```
-     This creates an experiment directory structure in `experiment_my_experiment/`.
 
- 3.  **Execute:**
-     The setup script generates a `run_pipeline.sh` inside `experiment_my_experiment/configs/`. You can uncomment the relevant steps in that script and run it, or rely on the orchestration if enabled.
+ 3.  **Setup:** Initialize the experiment directory.
+     ```bash
+     python3 setup_experiment.py --config config.yaml --name my_experiment
+     ```
+     This creates an experiment directory structure in `output/my_experiment/`.
+
+ 4.  **Execute:**
+     Run the pipeline script generated in the output directory:
+     ```bash
+     ./output/my_experiment/run_pipeline.sh
+     ```
+
+     *Alternatively, you can run immediately during setup:*
+     ```bash
+     python3 setup_experiment.py --config config.yaml --name my_experiment --run
+     ```
 
  ### Development & Testing
 
@@ -83,7 +105,10 @@
  ├── config.yaml             # Main experiment configuration
  ├── config_meta.yaml        # Environment-specific settings (Docker tags, commands)
  ├── setup_experiment.py     # Entry point script
+ ├── validate_config.py      # Configuration validation script
  ├── docker-compose.yml      # Orchestration definition
+ ├── check_env.sh            # Environment verification script
+ ├── quickstart/             # Quickstart guide and demo resources
  ├── Makefile                # Build/Run shortcuts
  ├── shared/                 # Common Python code (Config, Utils, Potentials)
  ├── workers/                # Source code for micro-services

@@ -13,16 +13,18 @@ $$ E_{target} = E_{DFT} - E_{LJ} $$
 
 ## Docker Image
 
+The recommended way to build and run this worker is via the root `docker-compose.yml`.
+
+**Build:**
+```bash
+# From repository root
+docker-compose build dft_worker
+```
+
 The image is based on `quay.io/quantum-espresso/qe:7.3` and includes:
 *   Python 3 + ASE
 *   Quantum Espresso binaries (`pw.x`)
 *   Shared project code
-
-**Build Command:**
-```bash
-# From repository root
-docker build -t dft_worker:latest -f workers/dft_worker/Dockerfile .
-```
 
 ## Usage
 
@@ -47,4 +49,4 @@ docker run --rm -v $(pwd)/data:/data dft_worker:latest \
 
 ## Requirements
 
-*   **Pseudopotentials**: The `config.yaml` must point to a valid directory containing Pseudopotentials (e.g., SSSP) accessible inside the container (usually mounted via `/data` or baked into the image).
+*   **Pseudopotentials**: The `config.yaml` (or `meta_config.yaml`) must point to a valid directory containing Pseudopotentials (e.g., SSSP) accessible inside the container.

@@ -10,30 +10,33 @@ import sys
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-REQUIRED_SECTIONS = [
-    "experiment",
-    "md_params",
-    "dft_params",
-    "ace_model",
-    "al_params",
-    "training_params",
-    "exploration"
-]
+def validate_nested_key(config: Dict[str, Any], keys: List[str], expected_type: Optional[type] = None) -> bool:
+    """
+    Traverses the config dictionary using a list of keys.
+    Returns True if the key exists and matches expected_type (if provided).
+    """
+    current = config
+    path_str = ""
 
-REQUIRED_KEYS = {
-    "experiment": ["name"],
-    "md_params": ["elements", "temperature", "n_steps"],
-    "dft_params": ["kpoint_density"],
-    "ace_model": ["elements", "cutoff"],
-    "al_params": ["n_clusters", "r_core", "box_size", "initial_potential"],
-    "training_params": ["loss_energy", "loss_force"],
-}
+    for i, key in enumerate(keys):
+        path_str = f"{path_str}.{key}" if path_str else key
+
+        if not isinstance(current, dict) or key not in current:
+            logger.error(f"Missing key: '{path_str}'")
+            return False
+        current = current[key]
+
+    if expected_type and not isinstance(current, expected_type):
+        logger.error(f"Key '{path_str}' must be of type {expected_type.__name__}, got {type(current).__name__}")
+        return False
+
+    return True
 
 def validate_config(config_path: str) -> bool:
     path = Path(config_path)
@@ -54,24 +57,51 @@ def validate_config(config_path: str) -> bool:
 
     valid = True
 
-    # Check Sections
-    for section in REQUIRED_SECTIONS:
-        if section not in config:
-            logger.error(f"Missing required section: '{section}'")
-            valid = False
-        elif not isinstance(config[section], dict):
-             logger.error(f"Section '{section}' must be a dictionary.")
-             valid = False
-        else:
-            # Check Keys within Section
-            if section in REQUIRED_KEYS:
-                for key in REQUIRED_KEYS[section]:
-                    if key not in config[section]:
-                        logger.error(f"Missing key '{key}' in section '{section}'")
-                        valid = False
+    # 1. Experiment Section
+    valid &= validate_nested_key(config, ["experiment", "name"], str)
+    valid &= validate_nested_key(config, ["experiment", "output_dir"], str)
+
+    # 2. Generation Section
+    if validate_nested_key(config, ["generation", "scenarios"], list):
+        scenarios = config["generation"]["scenarios"]
+        if not scenarios:
+             logger.warning("Generation scenarios list is empty.")
+        for i, scenario in enumerate(scenarios):
+             if not isinstance(scenario, dict):
+                  logger.error(f"Scenario #{i} in generation.scenarios is not a dictionary.")
+                  valid = False
+             elif "type" not in scenario:
+                  logger.error(f"Scenario #{i} missing 'type' key.")
+                  valid = False
+
+    # 3. Seed Generation
+    valid &= validate_nested_key(config, ["seed_generation", "crystal_type"], str)
+    valid &= validate_nested_key(config, ["seed_generation", "n_random_structures"], int)
+
+    # 4. DFT Params
+    valid &= validate_nested_key(config, ["dft_params", "kpoint_density"], (float, int))
+
+    # 5. ACE Model (Deeply Nested)
+    # ace_model -> pacemaker_config -> potential -> elements
+    valid &= validate_nested_key(config, ["ace_model", "pacemaker_config", "potential", "elements"], list)
+    valid &= validate_nested_key(config, ["ace_model", "pacemaker_config", "cutoff"], (float, int))
+
+    # 6. MD Params
+    valid &= validate_nested_key(config, ["md_params", "temperature"], (float, int))
+    valid &= validate_nested_key(config, ["md_params", "n_steps"], int)
+    valid &= validate_nested_key(config, ["md_params", "elements"], list)
+
+    # 7. AL Params
+    valid &= validate_nested_key(config, ["al_params", "n_clusters"], int)
+    valid &= validate_nested_key(config, ["al_params", "r_core"], (float, int))
+    valid &= validate_nested_key(config, ["al_params", "box_size"], (float, int))
+    # initial_potential can be null or string, checking existence
+    if "al_params" in config and "initial_potential" not in config["al_params"]:
+         logger.error("Missing key: 'al_params.initial_potential'")
+         valid = False
 
     if valid:
-        logger.info(f"✅ Configuration '{config_path}' is valid.")
+        logger.info(f"✅ Configuration '{config_path}' passed validation.")
     else:
         logger.error("❌ Configuration validation failed.")
 

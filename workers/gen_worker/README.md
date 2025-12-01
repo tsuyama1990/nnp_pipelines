@@ -9,15 +9,19 @@ This worker handles structure generation and filtering using **MACE** (Massively
 
 ## Docker Image
 
-**Build Command:**
+The recommended way to build and run this worker is via the root `docker-compose.yml`.
+
+**Build:**
 ```bash
 # From repository root
-docker build -t gen_worker:latest -f workers/gen_worker/Dockerfile .
+docker-compose build gen_worker
 ```
 
 *Note: This worker requires GPU support (NVIDIA Drivers) for MACE inference. PyXtal generation runs on CPU.*
 
 ## Usage
+
+The orchestrator typically manages this worker. However, you can run it manually for testing.
 
 ### 1. Generation
 
