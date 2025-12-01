@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from ase import Atoms
 from shared.generators.small_cell import SmallCellGenerator
-from src.sampling.strategies.max_gamma import MaxGammaSampler
+from workers.pace_worker.src.sampling.strategies.max_gamma import MaxGammaSampler
 
 class TestSmallCellGenerator(unittest.TestCase):
     def setUp(self):
@@ -24,9 +24,9 @@ class TestSmallCellGenerator(unittest.TestCase):
                            cell=[10, 10, 10],
                            pbc=True)
 
-    @patch('src.scenario_generation.strategies.small_cell.LAMMPS')
-    @patch('src.scenario_generation.strategies.small_cell.ExpCellFilter')
-    @patch('src.scenario_generation.strategies.small_cell.FIRE')
+    @patch('shared.generators.small_cell.LAMMPS')
+    @patch('shared.generators.small_cell.ExpCellFilter')
+    @patch('shared.generators.small_cell.FIRE')
     def test_generate_structure(self, mock_fire, mock_filter, mock_lammps):
         # Setup mocks
         mock_calc = MagicMock()
@@ -52,9 +52,9 @@ class TestSmallCellGenerator(unittest.TestCase):
         dists = np.linalg.norm(positions - center_pos, axis=1)
         self.assertLess(np.min(dists), 0.01) # One atom should be at center
 
-    @patch('src.scenario_generation.strategies.small_cell.LAMMPS')
-    @patch('src.scenario_generation.strategies.small_cell.ExpCellFilter')
-    @patch('src.scenario_generation.strategies.small_cell.FIRE')
+    @patch('shared.generators.small_cell.LAMMPS')
+    @patch('shared.generators.small_cell.ExpCellFilter')
+    @patch('shared.generators.small_cell.FIRE')
     def test_relaxation_called(self, mock_fire, mock_filter, mock_lammps):
         mock_calc = MagicMock()
         mock_lammps.return_value = mock_calc

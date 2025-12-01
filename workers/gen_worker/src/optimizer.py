@@ -79,9 +79,9 @@ class FoundationOptimizer:
         return relaxed_structures
 
     def _is_physically_valid(self, atoms: Atoms) -> bool:
-        """Check if the structure is physically valid.
+        """Check if the structure is physically valid using ASE.
 
-        Currently a placeholder for energy divergence or atom collapse checks.
+        Checks for overlapping atoms (distance < 0.7 * sum of covalent radii).
 
         Args:
             atoms: Atoms object to check.
@@ -89,5 +89,38 @@ class FoundationOptimizer:
         Returns:
             bool: True if valid, False otherwise.
         """
-        # TODO: Implement actual physical validation (e.g., min distance check)
+        try:
+            from ase.neighborlist import neighbor_list
+            from ase.data import covalent_radii
+        except ImportError:
+             logger.warning("ASE not fully available for neighborlist.")
+             return True
+
+        # Check if neighbor list returns any pairs closer than cutoff
+        # We need a dynamic cutoff based on species.
+        # Alternatively, we can use a simpler heuristic or just check min distance.
+
+        # Using a simplistic but effective approach: check all pairs
+        # But for efficiency, neighbor_list is better.
+        # We want to check d < 0.7 * (r_i + r_j)
+
+        # Strategy: Get all distances. If any d_ij < 0.7 * (r_i + r_j), reject.
+        # To avoid O(N^2) for large cells, neighbor_list with a safe upper bound cutoff.
+        # Max covalent radius is ~2.3A (Cs). Max sum ~4.6. 0.7 * 4.6 ~ 3.2.
+        # So cutoff=3.5 is safe.
+
+        cutoff = 3.5
+        i, j, d = neighbor_list('ijd', atoms, cutoff)
+
+        numbers = atoms.get_atomic_numbers()
+
+        for idx in range(len(d)):
+             dist = d[idx]
+             r_i = covalent_radii[numbers[i[idx]]]
+             r_j = covalent_radii[numbers[j[idx]]]
+
+             if dist < 0.7 * (r_i + r_j):
+                 logger.debug(f"Overlap detected: {dist:.2f} < 0.7*({r_i}+{r_j})")
+                 return False
+
         return True
