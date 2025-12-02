@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/wrappers/lammps_wrapper.py
+# hypothesis_version: 6.148.3
+
+['--center', '--config', '--gamma', '--meta-config', '--output', '--potential', '--restart', '--steps', '--structure', '/app/src/main.py', 'None', 'kmc', 'lammps_worker:latest', 'md', 'python', 'small_cell']

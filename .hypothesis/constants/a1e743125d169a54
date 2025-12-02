@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/dft_worker/src/strategies/delta_labeler.py
+# hypothesis_version: 6.148.3
+
+[-1.0, 0.0, 1.0, 10.0, 'e0_offset', 'energy', 'energy_dft_raw', 'energy_weight', 'forces', 'forces_dft_raw', 'stress', 'virial', 'virial_weight']

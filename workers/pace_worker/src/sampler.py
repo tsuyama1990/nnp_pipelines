@@ -12,7 +12,7 @@ import numpy as np
 import yaml
 from ase import Atoms
 
-from sampling.strategies.ace_sampler import ACESampler
+from .sampling.strategies.ace_sampler import ACESampler
 
 try:
     from sklearn.cluster import Birch

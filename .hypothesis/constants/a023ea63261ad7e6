@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/pace_worker/src/strategies/pacemaker.py
+# hypothesis_version: 6.148.3
+
+[0.99, '*.yace', '--overwrite', '--prune', '-a', '-d', '-f', '-o', '.', 'ase_atoms', 'data', 'elements', 'filename', 'fitting', 'gzip', 'input.yaml', 'input_potential', 'pace_activeset', 'pacemaker', 'potential', 'potential.asi', 'w']

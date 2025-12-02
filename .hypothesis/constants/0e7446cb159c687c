@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/pace_worker/src/sampling/strategies/max_vol.py
+# hypothesis_version: 6.148.3
+
+[50000, 'SelectMaxVol', 'atom_indices', 'gamma', 'max_rows', 'n_clusters', 'potential_path', 'structures']

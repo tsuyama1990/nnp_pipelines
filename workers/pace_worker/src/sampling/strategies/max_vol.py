@@ -6,7 +6,7 @@ from typing import List, Tuple
 from ase import Atoms
 
 from shared.core.interfaces import Sampler
-from src.sampling.strategies.ace_sampler import ACESampler
+from .ace_sampler import ACESampler
 
 try:
     import pyace

@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/core/config.py
+# hypothesis_version: 6.148.3
+
+[0.05, 0.1, 0.8909, 1.0, 1.5, 2.0, 2.5, 3.0, 5.0, 10.0, 12.0, 60.0, 300.0, 1000.0, 1000000000000.0, 100, 1000, '.', 'Co', 'Config', 'O', 'Ti', 'auto_physics', 'cluster', 'command', 'composite', 'constant.yaml', 'coordination', 'covalent', 'cuda', 'cutoff', 'dft', 'dft_params', 'elements', 'epsilon', 'experiment', 'generation', 'generation_params', 'hybrid', 'ionic', 'kpoint_density', 'lammps', 'lj_params', 'lmp_serial', 'md_params', 'medium', 'meta', 'metallic', 'name', 'output', 'output_dir', 'pseudo_dir', 'pw.x', 'r', 'random', 'sigma', 'sssp_json_path', 'surface_and_species', 'uncertainty', 'utf-8']

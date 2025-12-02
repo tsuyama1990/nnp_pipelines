@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
-from src.engines.lammps.runner import LAMMPSRunner
+from workers.al_md_kmc_worker.src.runner import LAMMPSRunner
 from shared.io.lammps_input import LAMMPSInputGenerator
 from shared.core.enums import SimulationState
 

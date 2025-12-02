@@ -1,7 +1,7 @@
 import unittest
 import subprocess
 from unittest.mock import MagicMock, patch
-from src.validation.pacemaker_validator import PacemakerValidator
+from workers.pace_worker.src.validation.pacemaker_validator import PacemakerValidator
 
 class TestPacemakerValidator(unittest.TestCase):
     @patch("subprocess.run")

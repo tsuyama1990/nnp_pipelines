@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/dft_worker/src/configurator.py
+# hypothesis_version: 6.148.3
+
+[1e-06, 0.05, 0.3, 0.7, 200, 'calculation', 'charge', 'control', 'conv_thr', 'degauss', 'disk_io', 'ecutrho', 'ecutwfc', 'electron_maxstep', 'electrons', 'magnetism', 'mixing_beta', 'moments', 'mv', 'none', 'nspin', 'occupations', 'pseudo_dir', 'scf', 'smearing', 'system', 'tot_charge', 'tprnfor', 'tstress']

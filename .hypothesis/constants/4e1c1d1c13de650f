@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/main.py
+# hypothesis_version: 6.148.3
+
+[1.0, '--center', '--config', '--gamma', '--meta-config', '--output', '--potential', '--restart', '--steps', '--structure', '/app', '/app/src', '__main__', 'command', 'data', 'delta_learning_mode', 'kmc', 'md', 'small_cell', 'start_loop', 'store_true', 'wb']

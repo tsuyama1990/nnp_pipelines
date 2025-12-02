@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/core/enums.py
+# hypothesis_version: 6.148.3
+
+['completed', 'failed', 'no_event', 'success', 'uncertain']

@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/runner.py
+# hypothesis_version: 6.148.3
+
+['-in', 'ERROR', 'Fix halt', 'in.lammps', 'log.lammps', 'r', 'stderr.log', 'stdout.log', 'w']

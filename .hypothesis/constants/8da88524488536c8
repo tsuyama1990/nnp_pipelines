@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/pace_worker/src/validation/pacemaker_validator.py
+# hypothesis_version: 6.148.3
+
+[0.5, 1.0, 2.0, 5.0, '-p', '-s', ':', 'C11', 'FAILED', 'SUCCESS', 'UNKNOWN', 'cutoff', 'elastic_constants', 'energy', 'energy_dft_raw', 'epsilon', 'error', 'pace_diagnostics', 'shift_energy', 'sigma', 'status', 'total_energy_rmse', 'vdos']

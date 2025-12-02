@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/io/lammps_input.py
+# hypothesis_version: 6.148.3
+
+[0.001, 1.0, 2.0, 2.5, 300.0, 1000, '# User Template Body', 'atom_style atomic', 'boundary p p p', 'cutoff', 'dump_freq', 'elements', 'epsilon', 'input_template_path', 'masses', 'neighbor 1.0 bin', 'none', 'pair_modify shift no', 'pressure', 'r', 'restart_freq', 'shift_energy', 'sigma', 'temperature', 'thermo 10', 'timestep', 'units metal', 'w']

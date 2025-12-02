@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/gen_worker/src/scenarios.py
+# hypothesis_version: 6.148.3
+
+[0.02, 0.15, 1.0, 3.8, 4.21, 10.0, 230, 'Fe', 'MgO', 'O', 'Pt', 'base', 'bcc', 'composition', 'concentration', 'covalent', 'crystal_type', 'defect', 'defect_type', 'element', 'elements', 'grain_boundary', 'indices', 'interface', 'ionic', 'lattice', 'layer', 'layers', 'max_atoms', 'max_attempts', 'metallic', 'n_structures', 'num_structures', 'random', 'random_symmetry', 'rocksalt', 'size', 'space_group_range', 'species', 'structure', 'substrate', 'surface', 'symbol', 'type', 'vacancy', 'vacuum', 'volume_factor']

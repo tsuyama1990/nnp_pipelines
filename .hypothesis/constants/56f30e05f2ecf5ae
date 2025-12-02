@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/potentials/shifted_lj.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.5, 1.0, 2.0, 2.5, 4.0, 24.0, 'energy', 'forces', 'stress']

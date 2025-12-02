@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/autostructure/alloy.py
+# hypothesis_version: 6.148.3
+
+[0.0, 1.5, 2.0, 'clustering', 'features', 'grain_boundaries', 'grain_boundary', 'mixing', 'mode', 'phase_separation', 'random', 'random_substitution', 'sigma', 'stacking_fault', 'stacking_faults', 'type']

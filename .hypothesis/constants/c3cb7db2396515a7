@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/pace_worker/src/sampler.py
+# hypothesis_version: 6.148.3
+
+[0.5, 1.5, 6.0, 10.0, 200, 'Chebyshev', 'FinnisSinclair', 'N', 'bonds', 'cutoff', 'elements', 'embeddings', 'fs_parameters', 'max_deg', 'ndensity', 'npot', 'potential.yaml', 'r0', 'rad_base', 'rad_parameters', 'w']

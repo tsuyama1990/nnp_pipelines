@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/explorers/kmc_explorer.py
+# hypothesis_version: 6.148.3
+
+['Structure not found', 'Unknown', 'barrier', 'error', 'is_restart', 'kmc_output.data', 'lammps-data', 'lammps-dump-text', 'lammpstrj', 'reason']

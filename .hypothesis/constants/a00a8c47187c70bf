@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/workflows/active_learning_loop.py
+# hypothesis_version: 6.148.3
+
+['Exploration failed.', 'Max errors reached', 'al_params', 'current_asi', 'current_potential', 'current_structure', 'final_structure.xyz', 'is_restart', 'iteration', 'max_al_retries', 'md_params', 'potential.asi', 'r', 'restart.chk', 'training', 'training_params']

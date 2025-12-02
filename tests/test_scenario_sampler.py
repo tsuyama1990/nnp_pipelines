@@ -12,7 +12,7 @@ mock_sklearn.cluster.Birch = mock_birch
 sys.modules["sklearn"] = mock_sklearn
 sys.modules["sklearn.cluster"] = MagicMock(Birch=mock_birch)
 
-from src.scenario_generation.sampler import DirectSampler
+from workers.pace_worker.src.sampler import DirectSampler
 
 class TestDirectSampler(unittest.TestCase):
     def setUp(self):
@@ -23,7 +23,7 @@ class TestDirectSampler(unittest.TestCase):
             Atoms("H2", positions=[[0, 0, 0], [0, 0, 1.2]]),
         ]
 
-    @patch("src.scenario_generation.sampler.ACESampler")
+    @patch("workers.pace_worker.src.sampler.ACESampler")
     def test_sample(self, MockACESampler):
         mock_ace_instance = MockACESampler.return_value
         # Return different descriptors for each structure

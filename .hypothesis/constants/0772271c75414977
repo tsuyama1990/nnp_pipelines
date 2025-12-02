@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/autostructure/preopt.py
+# hypothesis_version: 6.148.3
+
+[0.1, 0.8, 200, 'cpu', 'float64', 'medium', 'small']

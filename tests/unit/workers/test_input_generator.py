@@ -4,10 +4,7 @@ import os
 import pytest
 from unittest.mock import MagicMock
 
-# Adjust path to find the worker code
-sys.path.append(os.path.join(os.getcwd(), "workers/lammps_worker/src"))
-
-from input_generator import LAMMPSInputGenerator
+from shared.io.lammps_input import LAMMPSInputGenerator
 
 @pytest.fixture
 def mock_params():

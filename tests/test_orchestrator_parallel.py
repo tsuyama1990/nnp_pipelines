@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import MagicMock, patch, ANY
 # Updated imports based on path patching
-from workflows.active_learning_loop import ActiveLearningOrchestrator
-from services.md_service import MDService, _run_md_task
+from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
+from workers.al_md_kmc_worker.src.services.md_service import MDService, _run_md_task
 from shared.core.config import Config, ExplorationStage, MDParams
 from shared.core.enums import SimulationState
 from pathlib import Path

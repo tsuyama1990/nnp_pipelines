@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/dft_worker/src/heuristics.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.02, 1.0, 2.0, 3.0, 5.0, 6.0, 7.0, 10.0, 'Ag', 'Au', 'Br', 'Cd', 'Ce', 'Cl', 'Co', 'Cr', 'Cu', 'Dy', 'Er', 'Eu', 'F', 'Fe', 'Gd', 'Hf', 'Hg', 'Ho', 'I', 'Ir', 'La', 'Lu', 'Mn', 'Mo', 'N', 'Nb', 'Nd', 'Ni', 'O', 'Os', 'P', 'Pd', 'Pm', 'Pr', 'Pt', 'Re', 'Rh', 'Ru', 'S', 'Sc', 'Se', 'Sm', 'Ta', 'Tb', 'Tc', 'Te', 'Ti', 'Tm', 'V', 'W', 'Y', 'Yb', 'Zn', 'Zr', 'degauss', 'fixed', 'insulator', 'is_lanthanoid', 'is_rare_earth', 'is_rare_earth_metal', 'is_transition_metal', 'magnetism', 'metal', 'moments', 'mv', 'nspin', 'occupations', 'smearing', 'system']

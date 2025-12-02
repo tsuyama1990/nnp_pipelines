@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/wrappers/base_wrapper.py
+# hypothesis_version: 6.148.3
+
+['--gpus', '--rm', '-e', '-v', '/data', 'HOST_WORK_DIR', 'all', 'docker', 'run']

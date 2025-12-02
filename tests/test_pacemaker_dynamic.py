@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch, mock_open
 import yaml
 import os
-from src.training.strategies.pacemaker import PacemakerTrainer
+from workers.pace_worker.src.strategies.pacemaker import PacemakerTrainer
 from shared.core.config import TrainingParams
 
 class TestPacemakerTrainerDynamic(unittest.TestCase):
@@ -16,8 +16,8 @@ class TestPacemakerTrainerDynamic(unittest.TestCase):
         )
         self.trainer = PacemakerTrainer(self.params)
 
-    @patch("src.training.strategies.pacemaker.get_available_vram")
-    @patch("src.training.strategies.pacemaker.suggest_batch_size")
+    @patch("workers.pace_worker.src.strategies.pacemaker.get_available_vram")
+    @patch("workers.pace_worker.src.strategies.pacemaker.suggest_batch_size")
     def test_get_dynamic_config(self, mock_suggest, mock_vram):
         mock_vram.return_value = 8000
         mock_suggest.return_value = 64
@@ -40,7 +40,7 @@ class TestPacemakerTrainerDynamic(unittest.TestCase):
         self.assertEqual(conf10["max_deg"], 8)
 
     @patch("subprocess.run")
-    @patch("src.training.strategies.pacemaker.PacemakerTrainer._update_and_sample_dataset")
+    @patch("workers.pace_worker.src.strategies.pacemaker.PacemakerTrainer._update_and_sample_dataset")
     @patch("pandas.read_pickle")
     @patch("pathlib.Path.exists")
     def test_prune_active_set(self, mock_exists, mock_pd, mock_update, mock_run):

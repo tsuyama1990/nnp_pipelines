@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/pace_worker/src/sampling/strategies/ace_sampler.py
+# hypothesis_version: 6.148.3
+
+['B', 'gamma']

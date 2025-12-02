@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
-from strategies.delta_labeler import DeltaLabeler
+from workers.dft_worker.src.strategies.delta_labeler import DeltaLabeler
 from shared.potentials.shifted_lj import ShiftedLennardJones
 
 class MockCalculator(Calculator):

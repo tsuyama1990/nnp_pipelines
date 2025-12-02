@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/autostructure/deformation.py
+# hypothesis_version: 6.148.3
+
+[1e-06, 0.05, 0.94, 0.96, 0.98, 1.0, 1.02, 1.04, 1.06, 'deformation', 'xy', 'xz', 'yz']

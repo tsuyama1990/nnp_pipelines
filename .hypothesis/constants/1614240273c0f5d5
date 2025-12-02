@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/shared/autostructure/covalent.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.1, 0.2, 0.3, 0.8, 1.0, 1.5, 100, 'H', 'amorphous_quench', 'count', 'interstitial', 'magnitude', 'rattle_amp', 'shear_strain', 'type']

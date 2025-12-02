@@ -1,0 +1,4 @@
+# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/adapters.py
+# hypothesis_version: 6.148.3
+
+['.json', '.pckl', '.pckl.gzip', '.xyz', ':', 'ase_atoms', 'asi_path', 'candidates', 'gzip', 'iteration', 'kmc_input', 'kmc_result', 'label_input', 'label_output', 'large_structure', 'n_samples', 'potential.asi', 'potential_yaml_path', 'r', 'rb', 'sampled', 'small_cell', 'structures', 'training_data', 'validation_metrics']
