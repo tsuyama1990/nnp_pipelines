@@ -8,6 +8,8 @@ This worker runs Molecular Dynamics (MD) and Kinetic Monte Carlo (kMC) simulatio
 2.  **Small Cell**: Relaxes small unit cells or performs specific structural optimizations.
 3.  **KMC**: Performs Off-Lattice KMC steps (saddle point search and migration).
 
+    > **Note:** This KMC implementation is designed for rapid Phase Space Exploration. It uses a fixed frequency prefactor and does not currently perform TST vibration analysis. For kinetic quantification, re-evaluation with transition state theory is recommended.
+
 ## Docker Image
 
 The recommended way to build and run this worker is via the root `docker-compose.yml`.
