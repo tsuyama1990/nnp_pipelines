@@ -207,8 +207,8 @@ al_params:
   r_core: 4.0
 
   # Size of the cubic box (Angstrom) carved out for labeling.
-  # Should be at least 2x the potential cutoff.
-  box_size: 12.0
+  # Recommended: At least 2 * potential_cutoff + 2.0. If omitted/commented out, it will be calculated automatically.
+  # box_size: 16.0
 
   # Path to the initial trained potential (.yace).
   # If missing, Phase 1 (Seed Generation) is triggered.

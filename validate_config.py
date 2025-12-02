@@ -107,7 +107,20 @@ def validate_config(config_path: str) -> bool:
     # 7. AL Params
     if not validate_nested_key(config, ["al_params", "n_clusters"], int): valid = False
     if not validate_nested_key(config, ["al_params", "r_core"], (float, int)): valid = False
-    if not validate_nested_key(config, ["al_params", "box_size"], (float, int)): valid = False
+
+    # box_size is optional (smart default), but if present, must be valid.
+    # We also enforce the safety check here: box_size >= 2 * cutoff + 2.0
+    box_size = config.get("al_params", {}).get("box_size")
+    if box_size is not None:
+        if not isinstance(box_size, (float, int)):
+             logger.error("al_params.box_size must be a number.")
+             valid = False
+        else:
+             cutoff = config.get("ace_model", {}).get("pacemaker_config", {}).get("cutoff", 5.0)
+             min_box = 2 * cutoff + 2.0
+             if box_size < min_box:
+                 logger.error(f"al_params.box_size ({box_size}) is too small. Must be >= 2*cutoff + 2.0 ({min_box}).")
+                 valid = False
 
     # initial_potential can be null (None) or string. If key exists, check type.
     if "al_params" in config:

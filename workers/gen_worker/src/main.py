@@ -48,6 +48,29 @@ def run_generate(args):
         except Exception as e:
             logger.error(f"Failed to generate for scenario {scen_conf}: {e}", exc_info=True)
 
+    # Pre-optimization (MACE)
+    # Check if we should run pre-optimization.
+    gen_params = config.get("generation_params", {}) if isinstance(config, dict) else {}
+    pre_opt_conf = gen_params.get("pre_optimization", {})
+
+    # Defaults: medium model, check for cuda
+    model_size = pre_opt_conf.get("model", "medium")
+    import torch
+    device_default = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pre_opt_conf.get("device", device_default)
+
+    if all_structures:
+        logger.info(f"Pre-relaxing {len(all_structures)} structures using MACE...")
+        try:
+            from optimizer import FoundationOptimizer
+            optimizer = FoundationOptimizer(model=model_size, device=device)
+            all_structures = optimizer.relax(all_structures)
+            logger.info(f"Pre-relaxation complete. Remaining structures: {len(all_structures)}")
+        except ImportError:
+            logger.warning("MACE not available. Skipping pre-relaxation.")
+        except Exception as e:
+            logger.warning(f"Pre-relaxation failed: {e}. Proceeding with raw structures.")
+
     write(args.output, all_structures)
     logger.info(f"Wrote {len(all_structures)} structures to {args.output}")
 

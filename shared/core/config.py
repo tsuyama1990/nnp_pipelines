@@ -97,7 +97,7 @@ class ALParams(BaseModel):
     gamma_threshold: float
     n_clusters: int = Field(..., gt=0)
     r_core: float = Field(..., gt=0)
-    box_size: float = Field(..., gt=0)
+    box_size: Optional[float] = Field(None, gt=0)
     initial_potential: str
     potential_yaml_path: str
     initial_dataset_path: Optional[str] = None
@@ -237,6 +237,16 @@ class Config(BaseModel):
     seed_generation: SeedGenerationParams = Field(default_factory=SeedGenerationParams)
     exploration_schedule: List[ExplorationStage] = Field(default_factory=list)
     monitoring: MonitoringParams = Field(default_factory=MonitoringParams)
+
+    @model_validator(mode='after')
+    def compute_defaults(self) -> "Config":
+        """Compute smart defaults for optional parameters."""
+        # Smart default for AL box_size
+        if self.al_params.box_size is None:
+            cutoff = self.ace_model.pacemaker_config.get('cutoff', 5.0)
+            self.al_params.box_size = 2 * cutoff + 4.0
+            logger.info(f"Auto-calculated AL box_size: {self.al_params.box_size} (cutoff={cutoff})")
+        return self
 
     @classmethod
     def load_meta(cls, path: Path) -> MetaConfig:
