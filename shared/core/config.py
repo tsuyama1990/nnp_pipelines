@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, List, Dict, Literal
 from ase.data import atomic_numbers, covalent_radii
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +80,8 @@ class ExplorationParams(BaseModel):
 
 class MDParams(BaseModel):
     """Parameters for Molecular Dynamics simulations."""
-    timestep: float = Field(..., gt=0)
-    temperature: float = Field(..., gt=0)
+    timestep: float = Field(..., ge=0.1, le=5.0, description="Timestep in fs")
+    temperature: float = Field(..., ge=0, le=5000, description="Temperature in K")
     pressure: float = Field(..., ge=0)
     n_steps: int = Field(..., gt=0)
     elements: List[str] = Field(..., min_length=1)
@@ -171,12 +171,32 @@ class GenerationParams(BaseModel):
     scenarios: List[Dict[str, Any]] = Field(default_factory=list)
     device: str = "cuda"
 
+    @field_validator('scenarios')
+    @classmethod
+    def check_scenarios_not_empty(cls, v):
+        if not v:
+            # We allow empty scenarios if it's not the generation phase, but usually
+            # if GenerationParams is instantiated, we expect scenarios or we should handle it.
+            # However, the prompt specifically asks: "Add a custom validator that checks if generation.scenarios is not empty."
+            # So I will raise a value error if it is empty.
+            raise ValueError("generation.scenarios must not be empty.")
+        return v
+
 
 class ACEModelParams(BaseModel):
     """Parameters for Pacemaker potential model."""
     pacemaker_config: Dict[str, Any] = Field(default_factory=dict)
     initial_potentials: List[str] = Field(default_factory=list)
     delta_learning_mode: bool = True
+
+    @field_validator('pacemaker_config')
+    @classmethod
+    def validate_pacemaker_cutoff(cls, v):
+        if 'cutoff' in v:
+            cutoff = v['cutoff']
+            if not (2.0 <= cutoff <= 15.0):
+                raise ValueError(f"ace_model.pacemaker_config.cutoff must be between 2.0 and 15.0 Angstrom. Got {cutoff}")
+        return v
 
 
 class TrainingParams(BaseModel):
@@ -192,6 +212,13 @@ class ExplorationStage(BaseModel):
     temp: List[float]
     press: List[float]
 
+class MonitoringParams(BaseModel):
+    """Parameters for monitoring and observability (W&B, TensorBoard)."""
+    enabled: bool = False
+    project: str = "ace_active_carver"
+    entity: Optional[str] = None
+    use_wandb: bool = True
+    use_tensorboard: bool = False
 
 class Config(BaseModel):
     """Main configuration class aggregating all parameter sections."""
@@ -209,6 +236,7 @@ class Config(BaseModel):
     generation_params: GenerationParams = Field(default_factory=GenerationParams)
     seed_generation: SeedGenerationParams = Field(default_factory=SeedGenerationParams)
     exploration_schedule: List[ExplorationStage] = Field(default_factory=list)
+    monitoring: MonitoringParams = Field(default_factory=MonitoringParams)
 
     @classmethod
     def load_meta(cls, path: Path) -> MetaConfig:

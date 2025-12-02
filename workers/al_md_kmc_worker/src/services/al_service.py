@@ -4,7 +4,7 @@ import tempfile
 import logging
 import json
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Tuple, Dict
 from ase import Atoms
 from ase.io import read, write
 
@@ -115,13 +115,27 @@ class ActiveLearningService:
                    potential_yaml_path: Path,
                    asi_path: Optional[Path],
                    work_dir: Path,
-                   iteration: int) -> Optional[str]:
+                   iteration: int) -> Tuple[Optional[str], Dict[str, Any]]:
         """Trigger Active Learning pipeline."""
         logger.info(f"Triggering AL for {len(uncertain_structures)} uncertain structures.")
+        metrics = {}
 
         # Ensure symbols
         for u_atoms in uncertain_structures:
              self.ensure_chemical_symbols(u_atoms)
+
+        # Calculate uncertainty stats
+        gammas = []
+        for atoms in uncertain_structures:
+            if hasattr(atoms, 'info') and 'max_gamma' in atoms.info:
+                gammas.append(atoms.info['max_gamma'])
+            elif hasattr(atoms, 'arrays') and 'gamma' in atoms.arrays:
+                gammas.append(atoms.arrays['gamma'].max())
+
+        if gammas:
+            import numpy as np
+            metrics["uncertainty_avg"] = float(np.mean(gammas))
+            metrics["uncertainty_max"] = float(np.max(gammas))
 
         clusters_to_label = []
         for atoms in uncertain_structures:
@@ -180,14 +194,17 @@ class ActiveLearningService:
 
         if not clusters_to_label:
             logger.error("No clusters generated.")
-            return None
+            return None, metrics
 
+        metrics["num_new_candidates"] = len(clusters_to_label)
         logger.info(f"Labeling {len(clusters_to_label)} clusters in parallel...")
         labeled_clusters = self._label_clusters_parallel(clusters_to_label)
 
         if not labeled_clusters:
             logger.error("No clusters labeled successfully.")
-            return None
+            return None, metrics
+
+        metrics["num_training_structures"] = len(labeled_clusters)
 
         # Epic 4: Baseline Potential Auto-Optimization
         if self.config.ace_model.delta_learning_mode:
@@ -207,34 +224,6 @@ class ActiveLearningService:
                     logger.info(f"Baseline Optimization Result: {opt_res}")
 
                     # Update Config with new params
-                    # config.lj_params is a dataclass, but we need to verify if we can update it in place
-                    # or if we need to update dictionaries that workers read.
-                    # Workers typically read config.lj_params.
-
-                    # NOTE: LJParams dataclass usually holds scalar epsilon/sigma.
-                    # If optimization returns per-species, we might have a mismatch
-                    # unless we update logic to support per-species or we average them.
-                    #
-                    # The BaselineOptimizer returns "epsilon": {el: val}, "sigma": {el: val}.
-                    # But config.lj_params is simple scalars in current implementation (see config.py LJParams).
-                    # The prompt says "Auto-Optimization... automatically fit LJ parameters".
-                    # If config.lj_params is updated, subsequent steps (like KMC) which read config.lj_params
-                    # will pick up the new values.
-                    #
-                    # Issue: LJParams dataclass fields are floats, not dicts.
-                    # If we simply overwrite them, it works for scalars.
-                    # If we want species specific, we must refactor config.
-                    # FOR NOW: We take the average or the first element if mono-atomic?
-                    # OR, better: We assume config.lj_params can hold dicts?
-                    # Checked config.py:
-                    # @dataclass class LJParams: epsilon: float, sigma: float ...
-                    # It expects floats.
-
-                    # Implementation Decision:
-                    # Update the scalars with the mean of the optimized values.
-                    # This is imperfect for alloys but fits the current architectural constraint
-                    # without refactoring the whole config system.
-
                     eps_vals = list(opt_res['epsilon'].values())
                     sig_vals = list(opt_res['sigma'].values())
 
@@ -271,7 +260,22 @@ class ActiveLearningService:
         validation_results = self.validator.validate(new_potential)
         logger.info(f"Validation Results: {validation_results}")
 
-        return new_potential
+        # Merge validation results into metrics
+        if isinstance(validation_results, dict):
+            # mapping: train_rmse_energy, train_rmse_force
+            # validation_results keys might differ, e.g. "energy_rmse", "force_rmse"
+            # We map best effort
+            if "energy_rmse" in validation_results:
+                metrics["train_rmse_energy"] = validation_results["energy_rmse"]
+            if "forces_rmse" in validation_results:
+                metrics["train_rmse_force"] = validation_results["forces_rmse"]
+            if "force_rmse" in validation_results:
+                 metrics["train_rmse_force"] = validation_results["force_rmse"]
+
+            # Also copy others
+            metrics.update(validation_results)
+
+        return new_potential, metrics
 
     def inject_deformation_data(self, input_structure_path: str):
         """Inject systematically deformed structures into the dataset."""

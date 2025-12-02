@@ -2,10 +2,36 @@
 
 import csv
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+def setup_logging(name: str = "ace_active_carver") -> logging.Logger:
+    """Sets up the global logging configuration.
+
+    Reads LOG_LEVEL from environment variables (default: INFO).
+    Sets external noisy libraries to WARNING.
+    """
+    log_level_str = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+        force=True # Ensure we override previous configs
+    )
+
+    # Silence noisy libraries
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("docker").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("paramiko").setLevel(logging.WARNING)
+
+    return logging.getLogger(name)
 
 
 class CSVLogger:
