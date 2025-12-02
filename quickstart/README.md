@@ -1,54 +1,71 @@
 # Quickstart Guide
 
-This guide will help you get up and running with the NNP Active Learning Pipeline.
+This guide will walk you through setting up and running a small demo experiment (Aluminum-Copper alloy) using ACE Active Carver.
 
-## Prerequisites
+## 1. Prerequisites
 
-1.  **Docker**: Ensure Docker is installed and running.
-2.  **NVIDIA GPU**: Required for `gen_worker` and `pace_worker` (or configure for CPU-only in `docker-compose.yml` if strictly needed, though GPU is recommended).
-3.  **Python 3.10+**: For the orchestrator and setup scripts.
+Ensure you have the following installed:
+- Docker & Docker Compose
+- NVIDIA Container Toolkit (for GPU acceleration)
+- Python 3.8+ (for the orchestrator)
 
-## Step 1: Environment Setup
-
-Check your environment:
+Verify your environment:
 ```bash
 ./check_env.sh
 ```
 
-Build the worker images:
+## 2. Build Containers
+
+Build the worker images. This might take a few minutes.
 ```bash
 docker-compose build
+```
+Start the worker services in the background:
+```bash
 docker-compose up -d
 ```
-*Note: The containers will stay running in the background.*
 
-## Step 2: Validate Configuration
+## 3. Prepare Configuration
 
-We provide a demo configuration for a simple Al-Cu alloy system.
+We provide a demo configuration file `quickstart/demo_config.yaml` optimized for a quick test run.
 
-Validate it:
+Validate the configuration:
 ```bash
 python3 validate_config.py quickstart/demo_config.yaml
 ```
+*Expected Output: `✅ Configuration 'quickstart/demo_config.yaml' passed validation.`*
 
-## Step 3: Run the Experiment
+## 4. Setup Experiment
 
-Initialize the experiment directory:
+Initialize the experiment directory structure. This does **not** start the heavy calculations yet.
 ```bash
-python3 setup_experiment.py --config quickstart/demo_config.yaml --name demo_experiment
+python3 setup_experiment.py --config quickstart/demo_config.yaml --name demo_run
 ```
 
-Run the pipeline:
+You should see output indicating the directory `output/demo_run` was created.
+
+## 5. Run the Pipeline
+
+You can now start the active learning loop.
+
 ```bash
-# Option A: Run immediately (if you used --run in setup)
-# Option B: Run the generated script
-./output/demo_experiment/run_pipeline.sh
+./output/demo_run/run_pipeline.sh
 ```
 
-## Step 4: Monitor
-
-Logs are available in `output/demo_experiment/logs/`.
-Worker logs can be viewed via Docker:
+Or, if you want to run everything in one go from the start (step 4 + 5):
 ```bash
-docker logs -f gen_worker
+python3 setup_experiment.py --config quickstart/demo_config.yaml --name demo_run --run
 ```
+
+## 6. Monitor Progress
+
+Logs are written to the console and to `output/demo_run/logs/`.
+You can check the status of workers using:
+```bash
+docker-compose ps
+```
+
+## Troubleshooting
+
+- **GPU Errors:** If you see errors related to CUDA or GPUs, ensure `nvidia-smi` works on your host and inside the containers (check `check_env.sh` output).
+- **Permissions:** Ensure your user has permission to read/write the `data/` directory.

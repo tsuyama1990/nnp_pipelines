@@ -1,0 +1,13 @@
+execution:
+  mpirun_command: mpirun -np 4
+lammps:
+  command: lmp_mpi
+dft:
+  command: pw.x
+  pseudo_dir: ./pseudos
+  sssp_json_path: ./sssp.json
+docker:
+  pace_image: pace_worker:latest
+  lammps_image: lammps_worker:latest
+  dft_image: dft_worker:latest
+  gen_image: gen_worker:latest

@@ -167,43 +167,35 @@ def main():
 
         setup.create_directory_structure()
         setup.generate_step_configs()
-
-        # NOTE: We rely on ExperimentSetup.generate_pipeline_script logic.
-        # If it comments things out, we should fix it in the source.
-        # But for now, we assume standard generation. The prompt asked to fix it.
-        # Since I cannot easily modify ExperimentSetup (it's inside workers/al_md_kmc_worker/src),
-        # I will patch the generated file here if possible, or assume the user wants me to modify the source
-        # of ExperimentSetup.
-        # However, looking at the previous plan, I am supposed to "Fix run_pipeline.sh generation".
-        # This implies modifying ExperimentSetup logic.
-
         setup.generate_pipeline_script()
 
-        # Fix run_pipeline.sh content if it was commented out.
-        # The generate_pipeline_script method likely uses a template.
-        # Instead of modifying the deep source, I will rewrite the script here to be sure.
-
+        # Overwrite run_pipeline.sh with a valid, executable script
+        # This addresses the "commented out" issue and UX feedback
         run_script_path = setup.exp_dir / "run_pipeline.sh"
-        if run_script_path.exists():
-             # Basic fix: uncomment lines starting with # python or # ./
-             # Better: Write a correct script.
-             content = f"""#!/bin/bash
+        content = f"""#!/bin/bash
 # Generated Pipeline Script
 set -e
 
-echo "Starting Pipeline..."
+echo "Starting Pipeline for experiment: {setup.exp_name}"
 
-# Run the Active Learning Orchestrator
-# This single command manages the entire loop defined in config.yaml
-python3 ../../setup_experiment.py --resume . --iteration 0
+# This script invokes the orchestrator to manage the entire Active Learning loop.
+# It resumes from the experiment root directory.
 
-echo "Pipeline finished."
+# Get the absolute path to the setup_experiment.py script (assumed to be 2 levels up)
+SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
+ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+SETUP_SCRIPT="$ROOT_DIR/setup_experiment.py"
+
+echo "Resuming experiment from: $SCRIPT_DIR"
+
+python3 "$SETUP_SCRIPT" --resume "$SCRIPT_DIR" --iteration 0
+
+echo "Pipeline finished successfully."
 """
-             with open(run_script_path, "w") as f:
-                 f.write(content)
-             os.chmod(run_script_path, 0o755)
-             logger.info(f"Generated executable pipeline script at: {run_script_path}")
-
+        with open(run_script_path, "w") as f:
+            f.write(content)
+        os.chmod(run_script_path, 0o755)
+        logger.info(f"Generated executable pipeline script at: {run_script_path}")
 
         if args.run:
             logger.info("Setup complete. Starting orchestrator immediately (--run specified)...")
@@ -221,7 +213,6 @@ echo "Pipeline finished."
         else:
             logger.info("Setup complete.")
             logger.info(f"To run the pipeline, execute: {setup.exp_dir}/run_pipeline.sh")
-            logger.info("Or run: python setup_experiment.py --resume " + str(setup.exp_dir))
 
 if __name__ == "__main__":
     main()

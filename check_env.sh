@@ -38,7 +38,6 @@ else
 fi
 
 echo "Environment check passed!"
-exit 0
 
 # Check for LAMMPS PACE support (Optional/Warning)
 echo "Checking LAMMPS PACE support..."
@@ -55,3 +54,5 @@ if command -v docker &> /dev/null; then
         echo "ℹ️  lammps_worker:latest image not found. Skipping PACE check (run 'docker-compose build' first)."
     fi
 fi
+
+exit 0
