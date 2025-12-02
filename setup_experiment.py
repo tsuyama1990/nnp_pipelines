@@ -214,19 +214,17 @@ fi
 echo "Repository Root: $REPO_ROOT"
 
 # Determine Docker Image (using default if not set)
-IMAGE="pace_worker:latest"
+        IMAGE="lammps_worker:latest"
 
 echo "Using Docker Image: $IMAGE"
 
-# We mount the repo root to /app so that 'shared' and 'workers' are available if the image expects them,
-# or if we are overriding code.
-# We also need to mount the experiment directory data.
-# The worker expects to work in the experiment directory usually?
-# setup_experiment.py says: os.chdir(experiment_root) before running.
-# So we should work in experiment directory.
+        # We mount the repo root to /app so that 'shared' and 'workers' are available.
+        # We also mount the experiment directory data to /app/work.
 
-# The prompt example: `docker run ... al_md_kmc_worker start_loop ...`
-# We need to map volumes.
+        # We use 'docker exec' if the container is running (via docker-compose) or 'docker run' if ephemeral.
+        # The prompt suggests seamless 'make up' experience which uses docker-compose.
+        # However, for a simple run script, 'docker run' is more robust if the stack isn't up.
+        # We will use 'docker run' as requested for validity.
 
 docker run --rm -it \\
     --gpus all \\
@@ -359,7 +357,7 @@ def main():
             run_active_learning(pipeline_args)
         else:
             logger.info("Setup complete.")
-            logger.info(f"To run the pipeline, execute: {setup.exp_dir}/run_pipeline.sh")
+            logger.info(f"To execute: {setup.exp_dir}/run_pipeline.sh")
 
 if __name__ == "__main__":
     main()

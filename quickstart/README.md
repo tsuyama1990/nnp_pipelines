@@ -1,71 +1,54 @@
-# Quickstart Guide
+# NNP Pipeline Quickstart
 
-This guide will walk you through setting up and running a small demo experiment (Aluminum-Copper alloy) using ACE Active Carver.
+This guide will help you set up and run a demo experiment (Aluminum-Copper) using the NNP Pipelines.
 
-## 1. Prerequisites
+## Prerequisites
 
-Ensure you have the following installed:
-- Docker & Docker Compose
-- NVIDIA Container Toolkit (for GPU acceleration)
-- Python 3.8+ (for the orchestrator)
+1.  **Docker** & **NVIDIA GPU** (nvidia-container-toolkit configured).
+2.  **uv** or **pip** (for Python dependencies).
 
-Verify your environment:
+## 1. Setup Environment
+
+Run the check script to ensure your environment is ready:
+
 ```bash
 ./check_env.sh
 ```
 
-## 2. Build Containers
-
-Build the worker images. This might take a few minutes.
-```bash
-docker-compose build
-```
-Start the worker services in the background:
-```bash
-docker-compose up -d
-```
-
-## 3. Prepare Configuration
-
-We provide a demo configuration file `quickstart/demo_config.yaml` optimized for a quick test run.
-
-Validate the configuration:
-```bash
-python3 validate_config.py quickstart/demo_config.yaml
-```
-*Expected Output: `✅ Configuration 'quickstart/demo_config.yaml' passed validation.`*
-
-## 4. Setup Experiment
-
-Initialize the experiment directory structure. This does **not** start the heavy calculations yet.
-```bash
-python3 setup_experiment.py --config quickstart/demo_config.yaml --name demo_run
-```
-
-You should see output indicating the directory `output/demo_run` was created.
-
-## 5. Run the Pipeline
-
-You can now start the active learning loop.
+Build the worker containers:
 
 ```bash
-./output/demo_run/run_pipeline.sh
+make build
 ```
 
-Or, if you want to run everything in one go from the start (step 4 + 5):
+Start the background services:
+
 ```bash
-python3 setup_experiment.py --config quickstart/demo_config.yaml --name demo_run --run
+make up
 ```
 
-## 6. Monitor Progress
+## 2. Validate Configuration
 
-Logs are written to the console and to `output/demo_run/logs/`.
-You can check the status of workers using:
+Validate the demo configuration:
+
 ```bash
-docker-compose ps
+uv run python validate_config.py quickstart/demo_config.yaml
 ```
 
-## Troubleshooting
+## 3. Setup & Run Experiment
 
-- **GPU Errors:** If you see errors related to CUDA or GPUs, ensure `nvidia-smi` works on your host and inside the containers (check `check_env.sh` output).
-- **Permissions:** Ensure your user has permission to read/write the `data/` directory.
+Initialize the experiment directory:
+
+```bash
+uv run python setup_experiment.py --config quickstart/demo_config.yaml --name AlCu_Demo
+```
+
+Run the pipeline:
+
+```bash
+./output/AlCu_Demo/run_pipeline.sh
+```
+
+## Monitoring
+
+Logs will be streamed to the console. Artifacts are saved in `output/AlCu_Demo`.

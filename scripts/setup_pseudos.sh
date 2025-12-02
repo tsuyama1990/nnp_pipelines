@@ -1,40 +1,38 @@
 #!/bin/bash
 set -e
 
-# Script to download and unpack SSSP (Standard Solid State Pseudopotentials)
-# for Quantum Espresso.
-
 PSEUDO_DIR="./pseudos"
-SSSP_URL="https://archive.materialscloud.org/record/file?filename=SSSP_precision_pseudos.tar.gz&record_id=1460"
-SSSP_FILENAME="SSSP_precision_pseudos.tar.gz"
+SSSP_URL="https://archive.materialscloud.org/record/file?filename=SSSP_1.3.0_PBE_efficiency.tar.gz&record_id=1460"
+TAR_NAME="SSSP_efficiency.tar.gz"
 
-echo "Setting up SSSP Pseudopotentials..."
+echo "Setting up Pseudopotentials..."
+echo "Target Directory: $PSEUDO_DIR"
 
-# Create directory if it doesn't exist
-if [ ! -d "$PSEUDO_DIR" ]; then
-    mkdir -p "$PSEUDO_DIR"
-    echo "Created directory: $PSEUDO_DIR"
-fi
-
-cd "$PSEUDO_DIR"
-
-# Download if not already present
-if [ ! -f "$SSSP_FILENAME" ]; then
-    echo "Downloading SSSP Precision Pseudos..."
-    # Using curl with -L to follow redirects (Materials Cloud uses redirects)
-    curl -L -o "$SSSP_FILENAME" "$SSSP_URL"
-    echo "Download complete."
+if [ -d "$PSEUDO_DIR" ]; then
+    echo "Directory $PSEUDO_DIR already exists."
+    # Optional: check if empty?
 else
-    echo "Archive $SSSP_FILENAME already exists. Skipping download."
+    mkdir -p "$PSEUDO_DIR"
 fi
 
-# Unpack
-echo "Unpacking..."
-tar -xzf "$SSSP_FILENAME"
+echo "Downloading SSSP Efficiency..."
+if command -v wget &> /dev/null; then
+    wget -O "$TAR_NAME" "$SSSP_URL"
+elif command -v curl &> /dev/null; then
+    curl -L -o "$TAR_NAME" "$SSSP_URL"
+else
+    echo "Error: Neither wget nor curl found."
+    exit 1
+fi
 
-# Optional: Clean up archive
-# rm "$SSSP_FILENAME"
+echo "Extracting..."
+tar -xf "$TAR_NAME" -C "$PSEUDO_DIR"
 
-echo "✅ Pseudopotentials setup complete in $PSEUDO_DIR"
-echo "   Please ensure 'config_meta.yaml' points to this directory:"
-echo "   dft: { pseudo_dir: \"./pseudos\" }"
+# Cleanup
+rm "$TAR_NAME"
+
+echo "✅ Pseudopotentials setup complete."
+echo "Please update your config.yaml 'dft_params' to point to: $PSEUDO_DIR"
+echo "Example:"
+echo "dft_params:"
+echo "  pseudo_dir: $PSEUDO_DIR"
