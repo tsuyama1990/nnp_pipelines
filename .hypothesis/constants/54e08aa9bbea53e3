@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/shared/utils/sssp_loader.py
-# hypothesis_version: 6.148.3
-
-[60.0, 4096, 'cutoff_rho', 'cutoff_wfc', 'filename', 'lengths', 'md5', 'r', 'rb']

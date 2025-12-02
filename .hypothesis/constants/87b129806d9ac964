@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/shared/engines/kmc.py
-# hypothesis_version: 6.148.3
-
-[0.0, 0.01, 0.1, 0.2, 1.0, 1.2, 1.5, 2.0, 100, 500, 1000, 1000000, 'H', 'High Gamma Saddle', 'barrier', 'calc', 'calculators', 'clusters_explored', 'coordination', 'displacement', 'gamma', 'hybrid', 'reason', 'results', 'strategy', 'z_coordinate']

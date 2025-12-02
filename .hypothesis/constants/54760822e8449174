@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/shared/generators/small_cell.py
-# hypothesis_version: 6.148.3
-
-[0.05, 0.1, 1.0, 1.5, 2.0, 5.0, 8.0, 200, 'cutoff', 'default', 'epsilon', 'is_boundary', 'lmp_serial', 'shift_energy', 'sigma']

@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/setup_experiment.py
-# hypothesis_version: 6.148.3
-
-['--config', '--iteration', '--name', '--resume', '-c', '-n', './pseudos', './sssp.json', '07_active_learning', '__main__', 'command', 'config.yaml', 'config_meta.yaml', 'configs', 'dft', 'dft_image', 'dft_worker:latest', 'docker', 'execution', 'experiment', 'gen_image', 'gen_worker:latest', 'lammps', 'lammps_image', 'lammps_worker:latest', 'lmp_mpi', 'mpirun -np 4', 'mpirun_command', 'name', 'pace_image', 'pace_worker:latest', 'pseudo_dir', 'pw.x', 'sssp_json_path', 'w', 'work']

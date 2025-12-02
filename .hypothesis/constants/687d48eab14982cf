@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/services/al_service.py
-# hypothesis_version: 6.148.3
-
-[0.0, 0.99, '%Y%m%d_%H%M%S', 'X', 'arrays', 'asi_path', 'context', 'debug_dump', 'dump_file', 'elements', 'epsilon', 'error', 'gamma', 'info', 'label_task_', 'max_gamma', 'n_clusters', 'potential_path', 'potential_yaml_path', 'pre_optimizer', 'preopt_rescue_failed', 'prune_active_set', 'pruning_frequency', 'pruning_threshold', 'rescue_md_failed', 'sigma', 'structures', 'temp_uncertain.xyz', 'type', 'w', 'xyz']

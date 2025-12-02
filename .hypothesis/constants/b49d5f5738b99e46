@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/wrappers/dft_wrapper.py
-# hypothesis_version: 6.148.3
-
-['--config', '--meta-config', '--output', '--structure', '/app/src/main.py', 'dft_worker:latest', 'python']

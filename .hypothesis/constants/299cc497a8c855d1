@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/setup/experiment_setup.py
-# hypothesis_version: 6.148.3
-
-[100.0, '01_generation.yaml', '02_pretraining.yaml', '03_sampling.yaml', '04_dft.yaml', '05_training.yaml', '06_production.yaml', 'ace_model', 'al_params', 'config_meta.yaml', 'configs', 'constant.yaml', 'constants', 'core.yaml', 'crystal_type', 'data', 'default_experiment', 'dft_cmd', 'dft_params', 'direct_selection', 'elements', 'experiment', 'exploration', 'fmax', 'generation', 'global_physics', 'kmc_params', 'lammps_cmd', 'lmp_serial', 'mace_medium', 'masses', 'md_params', 'model', 'mpirun -np 4', 'mpirun_cmd', 'n_md_steps', 'n_random_structures', 'n_samples_for_dft', 'name', 'pw.x', 'r', 'run_pipeline.sh', 'seed_generation', 'strategy', 'training_params', 'type', 'types', 'w', 'work']

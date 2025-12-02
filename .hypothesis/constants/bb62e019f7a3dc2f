@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/shared/autostructure/interface.py
-# hypothesis_version: 6.148.3
-
-[0.001, 0.15, 0.8, 1.0, 1.5, 2.0, 2.5, 5.0, 30.0, 45.0, 90.0, 'COM', 'angle', 'interface_epitaxial', 'interface_gradient', 'interface_twist', 'separation', 'type', 'width', 'z']

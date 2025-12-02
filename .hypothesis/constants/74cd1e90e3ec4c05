@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/.venv/bin/pytest
-# hypothesis_version: 6.148.3
-
-['-script.pyw', '.exe', '__main__']

@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/wrappers/gen_wrapper.py
-# hypothesis_version: 6.148.3
-
-[100.0, '--config', '--fmax', '--input', '--model', '--output', '/app/src/main.py', 'filter', 'gen_worker:latest', 'generate', 'medium', 'python']

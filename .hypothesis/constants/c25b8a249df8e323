@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/workers/al_md_kmc_worker/src/wrappers/pace_wrapper.py
-# hypothesis_version: 6.148.3
-
-['--asi', '--candidates', '--config', '--dataset', '--initial-potential', '--input', '--iteration', '--meta-config', '--n_clusters', '--n_samples', '--output', '--output_potential', '--potential', '--potential-yaml', '/app/src/main.py', 'direct_sample', 'pace_worker:latest', 'python', 'sample', 'train', 'validate']

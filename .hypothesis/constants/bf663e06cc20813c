@@ -1,4 +1,0 @@
-# file: /home/tomo/project/nnp_pipelines/shared/autostructure/ionic.py
-# hypothesis_version: 6.148.3
-
-[0.02, 0.1, 0.5, 0.6, 0.8, 1000.0, 1500.0, 'charge', 'charged_defect', 'defect_type', 'md_snapshot', 'miller', 'oxi_state', 'oxidation_state', 'polar_candidate', 'removed_element', 'surface', 'temperature', 'type', 'vacancy']
