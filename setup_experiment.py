@@ -244,7 +244,6 @@ def main():
 
     if args.resume:
         # Resume mode
-        # Fix Path Traversal
         try:
             resume_path = check_secure_path(args.resume)
         except PermissionError as e:
@@ -259,7 +258,6 @@ def main():
              sys.exit(1)
 
         experiment_root = resume_path
-        # Fix: Do not chdir. Use absolute paths.
 
         config_path = experiment_root / "configs" / "07_active_learning.yaml"
         meta_config_path = experiment_root / "configs" / "config_meta.yaml"
