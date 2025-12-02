@@ -1,11 +1,18 @@
 import json
 import logging
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+class Stage(str, Enum):
+    GENERATION = "GENERATION"
+    EXPLORATION = "EXPLORATION"
+    LABELING = "LABELING"
+    TRAINING = "TRAINING"
 
 class OrchestratorState(BaseModel):
     iteration: int = 0
@@ -14,9 +21,11 @@ class OrchestratorState(BaseModel):
     current_structure: Optional[str] = None
     is_restart: bool = False
     al_consecutive_counter: int = 0
+    current_stage: Stage = Stage.EXPLORATION
 
     class Config:
         extra = "allow"
+        use_enum_values = True
 
 class StateManager:
     """Manages the persistence of the orchestrator state."""

@@ -16,7 +16,7 @@ from shared.core.config import Config
 from shared.core.enums import KMCStatus
 from shared.utils.logger import CSVLogger
 
-from src.state_manager import StateManager
+from src.state_manager import StateManager, Stage
 from src.services.al_service import ActiveLearningService
 from src.interfaces.explorer import BaseExplorer, ExplorationStatus
 
@@ -85,6 +85,24 @@ class ActiveLearningOrchestrator:
         work_root = Path("work/07_active_learning").resolve()
         work_root.mkdir(parents=True, exist_ok=True)
 
+        # Initialize Monitoring (W&B)
+        wandb_run = None
+        if self.config.monitoring.enabled and self.config.monitoring.use_wandb:
+            try:
+                import wandb
+                wandb_run = wandb.init(
+                    project=self.config.monitoring.project,
+                    entity=self.config.monitoring.entity,
+                    config=self.config.model_dump(),
+                    name=self.config.experiment.name,
+                    resume="allow"
+                )
+                logger.info("Weights & Biases monitoring initialized.")
+            except ImportError:
+                logger.warning("wandb not installed. Monitoring disabled.")
+            except Exception as e:
+                logger.warning(f"Failed to initialize wandb: {e}")
+
         # Load State
         state = self.state_manager.load()
         iteration = state.get("iteration", 0)
@@ -94,6 +112,8 @@ class ActiveLearningOrchestrator:
         current_structure = state.get("current_structure") or self.config.md_params.initial_structure
         is_restart = state.get("is_restart", False)
         al_consecutive_counter = state.get("al_consecutive_counter", 0)
+        current_stage = state.get("current_stage", Stage.EXPLORATION)
+        uncertain_structures_path = state.get("uncertain_structures_path", None)
 
         original_cwd = Path.cwd()
 
@@ -121,28 +141,31 @@ class ActiveLearningOrchestrator:
         MAX_CONSECUTIVE_ERRORS = 5
 
         while True:
-            iteration += 1
+            # Check Resume Logic
+            if current_stage == Stage.EXPLORATION:
+                iteration += 1
+            else:
+                logger.info(f"Resuming Iteration {iteration} at stage {current_stage}")
 
-            # Save State
+            work_dir = work_root / f"iteration_{iteration}"
+            work_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save State (at start of iteration or resume)
             state.update({
                 "iteration": iteration,
                 "current_potential": current_potential,
                 "current_structure": current_structure,
                 "current_asi": current_asi,
                 "is_restart": is_restart,
-                "al_consecutive_counter": al_consecutive_counter
+                "al_consecutive_counter": al_consecutive_counter,
+                "current_stage": current_stage,
+                "uncertain_structures_path": uncertain_structures_path
             })
             self.state_manager.save(state)
 
-            work_dir = work_root / f"iteration_{iteration}"
-            work_dir.mkdir(parents=True, exist_ok=True)
-
-            logger.info(f"--- Starting Iteration {iteration} (AL Retries: {al_consecutive_counter}) ---")
+            logger.info(f"--- Starting Iteration {iteration} (Stage: {current_stage}, AL Retries: {al_consecutive_counter}) ---")
 
             try:
-                # Do NOT chdir
-                # os.chdir(work_dir)
-
                 abs_potential_path = self._resolve_path(current_potential, original_cwd)
                 abs_asi_path = self._resolve_path(current_asi, original_cwd) if current_asi else None
 
@@ -150,76 +173,138 @@ class ActiveLearningOrchestrator:
                     logger.error(f"Potential file not found: {abs_potential_path}")
                     break
 
-                input_structure_arg = self._prepare_structure_path(
-                    is_restart, iteration, current_structure, original_cwd, work_root
-                )
-                if not input_structure_arg:
-                    break
-
-                # --- Systematic Deformation Injection ---
-                def_freq = getattr(self.config.al_params, 'deformation_frequency', 0)
-                if is_al_active and iteration > 0 and def_freq > 0 and iteration % def_freq == 0:
-                    self.al_service.inject_deformation_data(input_structure_arg)
+                uncertain_structures = []
 
                 # --- Exploration Phase ---
-                exploration_result = self.explorer.explore(
-                    current_structure=input_structure_arg,
-                    potential_path=str(abs_potential_path),
-                    iteration=iteration,
-                    is_restart=is_restart,
-                    work_dir=work_dir
-                )
+                if current_stage == Stage.EXPLORATION:
+                    input_structure_arg = self._prepare_structure_path(
+                        is_restart, iteration, current_structure, original_cwd, work_root
+                    )
+                    if not input_structure_arg:
+                        break
 
-                if exploration_result.status == ExplorationStatus.FAILED:
-                    logger.error("Exploration failed.")
-                    break
+                    # --- Systematic Deformation Injection ---
+                    def_freq = getattr(self.config.al_params, 'deformation_frequency', 0)
+                    if is_al_active and iteration > 0 and def_freq > 0 and iteration % def_freq == 0:
+                        self.al_service.inject_deformation_data(input_structure_arg)
 
-                # AL Logic
-                if is_al_active:
-                    if exploration_result.status == ExplorationStatus.UNCERTAIN:
-                        max_retries = getattr(self.config.al_params, 'max_al_retries', 3)
-                        if al_consecutive_counter >= max_retries:
-                            raise HandledOrchestratorError("Max AL retries reached. Infinite loop detected.")
+                    exploration_result = self.explorer.explore(
+                        current_structure=input_structure_arg,
+                        potential_path=str(abs_potential_path),
+                        iteration=iteration,
+                        is_restart=is_restart,
+                        work_dir=work_dir
+                    )
 
-                        logger.info("Exploration detected uncertainty. Triggering AL.")
+                    if exploration_result.status == ExplorationStatus.FAILED:
+                        logger.error("Exploration failed.")
+                        break
 
-                        new_pot = self.al_service.trigger_al(
-                            exploration_result.uncertain_structures,
-                            abs_potential_path,
-                            potential_yaml_path,
-                            abs_asi_path,
-                            work_dir,
-                            iteration
-                        )
+                    if is_al_active and exploration_result.status == ExplorationStatus.UNCERTAIN:
+                        # Prepare for AL
+                        logger.info("Exploration detected uncertainty. Preparing for AL.")
 
-                        if new_pot:
-                            current_potential = str(Path(new_pot).resolve())
-                            is_restart = True
-                            new_asi = work_dir / "potential.asi"
-                            if new_asi.exists():
-                                current_asi = str(new_asi.resolve())
-                            al_consecutive_counter += 1
+                        uncertain_structures = exploration_result.uncertain_structures
+
+                        # Save uncertain structures
+                        uncertain_path = work_dir / "uncertain_structures.xyz"
+                        write(str(uncertain_path), uncertain_structures)
+                        uncertain_structures_path = str(uncertain_path)
+
+                        # Update State to LABELING
+                        current_stage = Stage.LABELING
+                        state.update({
+                            "current_stage": current_stage,
+                            "uncertain_structures_path": uncertain_structures_path
+                        })
+                        self.state_manager.save(state)
+
+                    else:
+                        # Success or No Event
+                        logger.info(f"Exploration phase completed with status: {exploration_result.status}")
+                        # Update state for next iteration
+                        if exploration_result.final_structure:
+                            restart_path = work_dir / "final_structure.xyz"
+                            write(str(restart_path), exploration_result.final_structure)
+                            current_structure = str(restart_path.resolve())
+
+                        is_restart = exploration_result.metadata.get("is_restart", False)
+                        al_consecutive_counter = 0
+                        # Stage remains EXPLORATION for next iteration
+                        continue
+
+                # --- AL Phase (Labeling & Training) ---
+                if current_stage == Stage.LABELING:
+                    # Load uncertain structures if empty (resume case)
+                    if not uncertain_structures and uncertain_structures_path:
+                        try:
+                            uncertain_structures = read(uncertain_structures_path, index=":")
+                            logger.info(f"Loaded {len(uncertain_structures)} uncertain structures from {uncertain_structures_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to load uncertain structures from {uncertain_structures_path}: {e}")
+                            # Fallback
+                            logger.warning("Falling back to Exploration due to missing data.")
+                            current_stage = Stage.EXPLORATION
+                            uncertain_structures_path = None
                             continue
-                        else:
-                            break
-                else:
-                    logger.info("AL is inactive. Exploration finished.")
-                    break
 
-                # Success or No Event
-                logger.info(f"Exploration phase completed with status: {exploration_result.status}")
-                al_consecutive_counter = 0
+                    max_retries = getattr(self.config.al_params, 'max_al_retries', 3)
+                    if al_consecutive_counter >= max_retries:
+                        raise HandledOrchestratorError("Max AL retries reached. Infinite loop detected.")
 
-                if exploration_result.final_structure:
-                    # Define restart file path
-                    restart_path = work_dir / "final_structure.xyz"
-                    # Save Atoms object to file
-                    write(str(restart_path), exploration_result.final_structure)
-                    # Update state variable with the PATH string
-                    current_structure = str(restart_path.resolve())
+                    # Use new signature with metrics
+                    new_pot, metrics = self.al_service.trigger_al(
+                        uncertain_structures,
+                        abs_potential_path,
+                        potential_yaml_path,
+                        abs_asi_path,
+                        work_dir,
+                        iteration
+                    )
 
-                # Update restart state based on explorer metadata
-                is_restart = exploration_result.metadata.get("is_restart", False)
+                    # Log metrics to W&B
+                    if wandb_run and metrics:
+                        metrics["iteration"] = iteration
+                        wandb_run.log(metrics)
+
+                    # Log to CSV (legacy/local)
+                    if self.csv_logger and metrics:
+                         self.csv_logger.log_metrics(
+                             iteration=iteration,
+                             max_gamma=metrics.get("uncertainty_max", 0.0),
+                             n_added=metrics.get("num_new_candidates", 0),
+                             active_set_size=metrics.get("active_set_size", 0), # Need to check if available
+                             rmse_energy=metrics.get("train_rmse_energy"),
+                             rmse_forces=metrics.get("train_rmse_force")
+                         )
+
+                    if new_pot:
+                        current_potential = str(Path(new_pot).resolve())
+                        is_restart = True
+
+                        new_asi = work_dir / "potential.asi"
+                        if new_asi.exists():
+                            current_asi = str(new_asi.resolve())
+                        al_consecutive_counter += 1
+
+                        # AL Done -> Back to Exploration
+                        current_stage = Stage.EXPLORATION
+                        uncertain_structures_path = None
+
+                        # Save state at end of AL
+                        state.update({
+                            "current_potential": current_potential,
+                            "current_asi": current_asi,
+                            "is_restart": is_restart,
+                            "al_consecutive_counter": al_consecutive_counter,
+                            "current_stage": current_stage,
+                            "uncertain_structures_path": uncertain_structures_path
+                        })
+                        self.state_manager.save(state)
+                        continue
+                    else:
+                        logger.warning("AL triggered but no new potential returned.")
+                        break
 
                 # Reset error counter on successful iteration
                 error_counter = 0
@@ -236,9 +321,11 @@ class ActiveLearningOrchestrator:
                     continue
                 else:
                     logger.error("Max errors reached")
-                    # Break loop or raise?
-                    # Raising allows the caller (test) to see failure.
                     raise RuntimeError("Max consecutive errors reached in Orchestrator") from e
+
+        # Finish W&B run if loop exits
+        if wandb_run:
+            wandb_run.finish()
 
     def _find_latest_restart(self, iteration: int, work_root: Path, max_search: int = 5) -> Optional[Path]:
         for i in range(1, max_search + 1):
