@@ -48,26 +48,36 @@ def run_generate(args):
         except Exception as e:
             logger.error(f"Failed to generate for scenario {scen_conf}: {e}", exc_info=True)
 
-    # Pre-optimization (MACE)
-    # Check if we should run pre-optimization.
+    # Pre-optimization (MACE) - Critical for Stability
+    # We enforce pre-optimization if MACE is available to prevent high-energy overlaps.
     gen_params = config.get("generation_params", {}) if isinstance(config, dict) else {}
     pre_opt_conf = gen_params.get("pre_optimization", {})
 
     # Defaults: medium model, check for cuda
     model_size = pre_opt_conf.get("model", "medium")
-    import torch
-    device_default = "cuda" if torch.cuda.is_available() else "cpu"
-    device = pre_opt_conf.get("device", device_default)
+
+    # Initialize with GPU if available
+    # We move imports inside try/except to prevent crashes if dependencies are missing.
+    device = pre_opt_conf.get("device", "cpu") # Default fallback
 
     if all_structures:
-        logger.info(f"Pre-relaxing {len(all_structures)} structures using MACE...")
         try:
+            import torch
+            if torch.cuda.is_available():
+                device_default = "cuda"
+            else:
+                device_default = "cpu"
+
+            # Use user config if provided, else auto-detected
+            device = pre_opt_conf.get("device", device_default)
+
+            logger.info(f"Pre-relaxing {len(all_structures)} structures using MACE (device={device})...")
             from optimizer import FoundationOptimizer
             optimizer = FoundationOptimizer(model=model_size, device=device)
             all_structures = optimizer.relax(all_structures)
             logger.info(f"Pre-relaxation complete. Remaining structures: {len(all_structures)}")
         except ImportError:
-            logger.warning("MACE not available. Skipping pre-relaxation.")
+            logger.warning("MACE or Torch not available (ImportError). Skipping pre-relaxation.")
         except Exception as e:
             logger.warning(f"Pre-relaxation failed: {e}. Proceeding with raw structures.")
 

@@ -119,8 +119,9 @@ def validate_config(config_path: str) -> bool:
              cutoff = config.get("ace_model", {}).get("pacemaker_config", {}).get("cutoff", 5.0)
              min_box = 2 * cutoff + 2.0
              if box_size < min_box:
-                 logger.error(f"al_params.box_size ({box_size}) is too small. Must be >= 2*cutoff + 2.0 ({min_box}).")
-                 valid = False
+                 msg = f"al_params.box_size ({box_size}) is too small. Must be >= 2*cutoff + 2.0 ({min_box})."
+                 logger.error(msg)
+                 raise ValueError(msg)
 
     # initial_potential can be null (None) or string. If key exists, check type.
     if "al_params" in config:

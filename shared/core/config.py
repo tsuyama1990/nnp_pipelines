@@ -136,7 +136,7 @@ class KMCParams(BaseModel):
 
 class DFTParams(BaseModel):
     """Parameters for Density Functional Theory calculations."""
-    kpoint_density: float = Field(60.0, gt=0)
+    kpoint_density: float = Field(0.04, gt=0)
     auto_physics: bool = True
 
 
