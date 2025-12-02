@@ -31,6 +31,14 @@
  ./check_env.sh
  ```
 
+ ### Pseudopotentials Setup
+
+ Users must download SSSP pseudopotentials and place them in `./pseudos` (or wherever the config expects).
+ A helper script is available:
+ ```bash
+ ./scripts/download_sssp_efficiency.sh
+ ```
+
  ### Installation
 
  1.  Clone the repository:
