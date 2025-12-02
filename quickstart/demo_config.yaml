@@ -1,18 +1,15 @@
-# =============================================================================
-# Demo Configuration: Al-Cu Alloy
-# Minimal configuration for quickstart validation.
-# =============================================================================
+# Demo Configuration for Al-Cu System (Quickstart)
 
 experiment:
   name: "demo_al_cu"
-  output_dir: "output/demo"
+  output_dir: "output/demo_run"
 
 generation:
   scenarios:
     - type: "random_symmetry"
       elements: ["Al", "Cu"]
-      num_structures: 2
-      space_group_range: [225, 225] # Face-centered cubic
+      num_structures: 2  # Low number for demo speed
+      space_group_range: [225, 225] # FCC only for simplicity
       volume_factor: 1.0
 
 seed_generation:
@@ -27,12 +24,12 @@ seed_generation:
   n_samples_for_dft: 2
 
 dft_params:
-  kpoint_density: 0.2
+  kpoint_density: 0.25 # Lower density for speed
 
 ace_model:
   initial_potentials: []
   pacemaker_config:
-    cutoff: 6.0
+    cutoff: 5.0
     potential:
       delta: true
       elements: ["Al", "Cu"]
@@ -41,7 +38,7 @@ ace_model:
         max_deg: 4
         r0: 1.5
         rad_base: "Chebyshev"
-        rad_parameters: [6.0]
+        rad_parameters: [5.0]
         r_in: 1.5
       embeddings:
         Al:
@@ -55,17 +52,20 @@ ace_model:
     fitting:
       fit_cycles: 1
       max_time: 600
+      weighting:
+        type: "EnergyForce"
+        energy: 100.0
+        force: 1.0
+      ladder_step: []
     backend:
       evaluator: "tensorpot"
-      batch_size: 10
+      batch_size: 100
     data:
       test_size: 0.1
 
 training_params:
-  replay_ratio: 0.5
-  global_dataset_path: "data/demo_global.pckl"
-  loss_energy: 1.0
-  loss_force: 1.0
+  replay_ratio: 1.0
+  global_dataset_path: "data/global_dataset_demo.pckl"
 
 md_params:
   timestep: 1.0
@@ -81,11 +81,20 @@ md_params:
   dump_freq: 500
 
 exploration:
-  strategy: "lammps_md" # Simple strategy for demo
+  strategy: "lammps_md" # Simple MD for demo
 
 al_params:
   gamma_threshold: 0.2
   n_clusters: 2
-  r_core: 3.0
+  r_core: 4.0
   box_size: 10.0
   initial_potential: "potential.yace"
+  potential_yaml_path: "potential.yaml"
+  num_parallel_labeling: 2
+
+kmc_params:
+  active: false
+  temperature: 300.0
+  n_searches: 5
+  n_workers: 2
+  active_species: ["Cu"]
