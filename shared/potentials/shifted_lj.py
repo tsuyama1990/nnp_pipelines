@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, Union
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes, PropertyNotImplementedError
 from ase.neighborlist import NeighborList
+from ase.data import covalent_radii, atomic_numbers
 
 class ShiftedLennardJones(Calculator):
     """LennardJones calculator with potential shift to ensure V(rc) = 0.
@@ -15,7 +16,7 @@ class ShiftedLennardJones(Calculator):
 
     def __init__(self,
                  epsilon: Union[float, Dict[str, float]] = 1.0,
-                 sigma: Union[float, Dict[str, float]] = 1.0,
+                 sigma: Optional[Union[float, Dict[str, float]]] = None,
                  rcut: float = 2.5,
                  shift_energy: bool = True,
                  **kwargs):
@@ -24,6 +25,7 @@ class ShiftedLennardJones(Calculator):
         Args:
             epsilon: Energy well depth. float or dict {element: value}.
             sigma: Distance parameter. float or dict {element: value}.
+                   If None, defaults to 2 * covalent_radius * 0.89.
             rcut: Cutoff radius.
             shift_energy: If True, shift the potential energy so that V(rc) = 0.
             **kwargs: Arguments passed to Calculator.
@@ -66,10 +68,16 @@ class ShiftedLennardJones(Calculator):
             else:
                 eps = self.epsilon
 
-            if isinstance(self.sigma, dict):
+            # Dynamic Sigma Logic
+            if self.sigma is None:
+                z = atomic_numbers[el]
+                sig = 2 * covalent_radii[z] * 0.89
+            elif isinstance(self.sigma, dict):
                 sig = self.sigma.get(el)
                 if sig is None:
-                    raise ValueError(f"Sigma not found for element {el}")
+                    # Fallback to dynamic default if missing in dict
+                    z = atomic_numbers[el]
+                    sig = 2 * covalent_radii[z] * 0.89
             else:
                 sig = self.sigma
             return eps, sig
