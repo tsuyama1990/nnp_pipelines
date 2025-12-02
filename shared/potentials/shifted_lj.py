@@ -71,6 +71,7 @@ class ShiftedLennardJones(Calculator):
             # Dynamic Sigma Logic
             if self.sigma is None:
                 z = atomic_numbers[el]
+                # Refined Physics Default: sigma = 2 * covalent_radii[Z] * 0.89
                 sig = 2 * covalent_radii[z] * 0.89
             elif isinstance(self.sigma, dict):
                 sig = self.sigma.get(el)

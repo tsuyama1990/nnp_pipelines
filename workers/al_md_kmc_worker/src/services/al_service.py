@@ -60,6 +60,12 @@ class ActiveLearningService:
         self.max_workers = config.al_params.num_parallel_labeling
         self.executor = ParallelExecutor(max_workers=self.max_workers)
 
+        # Smart Default for box_size (Logic Action 2)
+        if self.config.al_params.box_size is None:
+             cutoff = self.config.ace_model.pacemaker_config.get('cutoff', 5.0)
+             self.config.al_params.box_size = 2 * cutoff + 4.0
+             logger.info(f"Auto-calculated box_size: {self.config.al_params.box_size} (2*cutoff + 4.0)")
+
         # Setup debug dump directory
         self.debug_dump_dir = Path("debug_dump")
         self.debug_dump_dir.mkdir(exist_ok=True)

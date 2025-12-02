@@ -45,8 +45,8 @@ class AtomicEnergyManager:
                  logger.warning(f"No filename found for {el} in SSSP. Cannot locate PP.")
                  continue
 
-            pp_path = self.pseudo_dir / filename
-            cache_path = pp_path.with_suffix(".json")
+            # Cache strategy: Look for {Element}.json in pseudo_dir
+            cache_path = self.pseudo_dir / f"{el}.json"
 
             # Check cache
             if cache_path.exists():
@@ -79,6 +79,7 @@ class AtomicEnergyManager:
                 try:
                     with open(cache_path, 'w') as f:
                         json.dump({"energy": float(e)}, f)
+                    logger.info(f"Saved E0 cache to {cache_path}")
                 except Exception as w_err:
                      logger.warning(f"Could not write cache to {cache_path}: {w_err}")
 

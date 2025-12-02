@@ -76,7 +76,7 @@ dft_params:
   # K-point density for grid generation (1/Angstrom).
   # Lower values mean denser grids.
   # Recommended: 0.04-0.06 for accuracy, 0.10-0.15 for quick testing
-  kpoint_density: 0.05
+  kpoint_density: 0.04
 
 # =============================================================================
 # Step 5: Training
@@ -98,7 +98,7 @@ ace_model:
       elements: ["Al", "Cu"]
       bonds:
         N: 3
-        max_deg: 6
+        max_deg: 5
         r0: 1.5
         rad_base: "Chebyshev"
         rad_parameters: [7.0]
@@ -117,8 +117,9 @@ ace_model:
       max_time: 3600
       weighting:
         type: "EnergyForce"
-        energy: 100.0
+        energy: 10.0
         force: 1.0
+        virial: 0.1
       ladder_step: []
     backend:
       evaluator: "tensorpot"
