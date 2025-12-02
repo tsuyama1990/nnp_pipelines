@@ -104,6 +104,14 @@ def validate_config(config_path: str) -> bool:
     if not validate_nested_key(config, ["md_params", "n_steps"], int): valid = False
     if not validate_nested_key(config, ["md_params", "elements"], list): valid = False
 
+    if validate_nested_key(config, ["md_params", "timestep"], (float, int)):
+         ts = config["md_params"]["timestep"]
+         if not (0.1 <= ts <= 5.0):
+              logger.error(f"md_params.timestep ({ts}) must be between 0.1 and 5.0 fs.")
+              valid = False
+    else:
+        valid = False
+
     # 7. AL Params
     if not validate_nested_key(config, ["al_params", "n_clusters"], int): valid = False
     if not validate_nested_key(config, ["al_params", "r_core"], (float, int)): valid = False

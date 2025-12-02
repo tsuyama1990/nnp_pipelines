@@ -47,17 +47,15 @@ A helper script is provided to download the SSSP efficiency library:
     cd ace-active-carver
     ```
 
-2.  Build and start the Docker services:
+2.  Check Environment:
     ```bash
-    # Using make (if available)
-    make build
-
-    # Or directly with Docker Compose
-    docker-compose build
+    ./check_env.sh
     ```
-    Once built, start the services in detached mode:
+
+3.  Build and start the Docker services:
     ```bash
-    docker-compose up -d
+    make build
+    make up
     ```
 
 ### Quickstart

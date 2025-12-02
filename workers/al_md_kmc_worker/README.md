@@ -15,9 +15,10 @@ This worker runs Molecular Dynamics (MD) and Kinetic Monte Carlo (kMC) simulatio
 The recommended way to build and run this worker is via the root `docker-compose.yml`.
 
 **Build:**
+Use the root Makefile:
 ```bash
 # From repository root
-docker-compose build lammps_worker
+make build
 ```
 
 The image must be built with a custom LAMMPS version that includes `ML-PACE`.

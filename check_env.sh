@@ -30,29 +30,13 @@ else
     echo "Skipping Docker GPU check (docker not found)."
 fi
 
-# Check uv
-if ! command -v uv &> /dev/null; then
-    echo "⚠️  Warning: uv is not installed. Python dependency management might be slower."
-else
+# Check uv or pip
+if command -v uv &> /dev/null; then
     echo "✅ uv is installed."
+elif command -v pip &> /dev/null; then
+    echo "✅ pip is installed."
+else
+    echo "⚠️  Warning: neither uv nor pip is found."
 fi
 
 echo "Environment check passed!"
-
-# Check for LAMMPS PACE support (Optional/Warning)
-echo "Checking LAMMPS PACE support..."
-if command -v docker &> /dev/null; then
-    # We check if the image exists first to avoid pulling/errors if not built
-    if docker image inspect lammps_worker:latest &> /dev/null; then
-        if docker run --rm lammps_worker:latest lmp_mpi -h | grep -q "pace"; then
-            echo "✅ LAMMPS worker supports PACE."
-        else
-            echo "⚠️  Warning: lammps_worker image found but 'pace' style not detected in lmp_mpi -h."
-            echo "    Ensure your LAMMPS image is built with the ML-PACE package."
-        fi
-    else
-        echo "ℹ️  lammps_worker:latest image not found. Skipping PACE check (run 'docker-compose build' first)."
-    fi
-fi
-
-exit 0
