@@ -115,7 +115,7 @@ def main():
                  kpts=(1, 1, 1) # Gamma point
              )
 
-        ae_manager = AtomicEnergyManager(meta.sssp_json_path)
+        ae_manager = AtomicEnergyManager(meta.sssp_json_path, meta.pseudo_dir)
         e0_dict = ae_manager.get_e0(sorted_elements, dft_calculator_factory)
 
         # Resolve DFT settings for the active crystal type

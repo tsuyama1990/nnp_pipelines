@@ -8,15 +8,19 @@ from ase.calculators.calculator import Calculator
 logger = logging.getLogger(__name__)
 
 class AtomicEnergyManager:
-    """Manages isolated atomic energies (E0) for Delta learning using SSSP JSON as storage."""
+    """Manages isolated atomic energies (E0) for Delta learning."""
 
-    def __init__(self, json_path: Path):
+    def __init__(self, json_path: Path, pseudo_dir: Path):
         self.json_path = json_path
+        self.pseudo_dir = pseudo_dir
 
     def get_e0(self, elements: List[str], calculator_factory: Callable[[str], Calculator]) -> Dict[str, float]:
         """
-        Loads E0 from SSSP JSON or calculates them if missing.
-        calculator_factory: Function that accepts an element symbol and returns a new Calculator instance.
+        Loads E0 from sidecar JSONs in pseudo_dir or calculates them if missing.
+
+        Args:
+            elements: List of element symbols.
+            calculator_factory: Function that accepts an element symbol and returns a new Calculator instance.
 
         Returns:
             Dict mapping element symbol to atomic energy (E0).
@@ -28,44 +32,58 @@ class AtomicEnergyManager:
             sssp_data = json.load(f)
 
         e0_dict = {}
-        updated = False
 
         for el in elements:
             if el not in sssp_data:
                  logger.warning(f"Element {el} not found in SSSP JSON. Skipping E0 check for it.")
                  continue
 
-            if "atomic_energy" in sssp_data[el]:
-                e0_dict[el] = sssp_data[el]["atomic_energy"]
-            else:
-                logger.info(f"E0 for {el} not found in SSSP JSON. Calculating...")
+            # Locate Pseudopotential file
+            # Assuming SSSP JSON structure has 'filename'
+            filename = sssp_data[el].get("filename")
+            if not filename:
+                 logger.warning(f"No filename found for {el} in SSSP. Cannot locate PP.")
+                 continue
 
-                # Calculate
+            pp_path = self.pseudo_dir / filename
+            cache_path = pp_path.with_suffix(".json")
+
+            # Check cache
+            if cache_path.exists():
                 try:
-                    # Create isolated atom in a large box
-                    atom = Atoms(el, cell=[15.0, 15.0, 15.0], pbc=True)
-                    atom.center()
-
-                    calc = calculator_factory(el)
-                    atom.calc = calc
-
-                    e = atom.get_potential_energy()
-                    e0_dict[el] = float(e)
-
-                    # Update data structure
-                    sssp_data[el]["atomic_energy"] = float(e)
-                    updated = True
-                    logger.info(f"Calculated E0 for {el}: {e:.4f} eV")
-
+                    with open(cache_path, 'r') as f:
+                        data = json.load(f)
+                        e0_dict[el] = data['energy']
+                        logger.info(f"Loaded cached E0 for {el} from {cache_path}")
+                        continue
                 except Exception as e:
-                    logger.error(f"Failed to calculate E0 for {el}: {e}")
-                    raise e
+                    logger.warning(f"Failed to read cache {cache_path}: {e}. Recalculating.")
 
-        if updated:
-            logger.info(f"Updating SSSP JSON with new atomic energies at {self.json_path}")
-            # Write back to JSON
-            # Preserve existing structure, just add atomic_energy key
-            with open(self.json_path, 'w') as f:
-                json.dump(sssp_data, f, indent=4)
+            logger.info(f"E0 for {el} not cached. Calculating...")
+
+            # Calculate
+            try:
+                # Create isolated atom in a large box
+                atom = Atoms(el, cell=[15.0, 15.0, 15.0], pbc=True)
+                atom.center()
+
+                calc = calculator_factory(el)
+                atom.calc = calc
+
+                e = atom.get_potential_energy()
+                e0_dict[el] = float(e)
+
+                logger.info(f"Calculated and cached E0 for {el} to {cache_path}")
+
+                # Save to cache
+                try:
+                    with open(cache_path, 'w') as f:
+                        json.dump({"energy": float(e)}, f)
+                except Exception as w_err:
+                     logger.warning(f"Could not write cache to {cache_path}: {w_err}")
+
+            except Exception as e:
+                logger.error(f"Failed to calculate E0 for {el}: {e}")
+                raise e
 
         return e0_dict
