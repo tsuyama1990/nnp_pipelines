@@ -7,12 +7,12 @@
 ## 🏗 Architecture
 
 The project follows a **Micro-kernel Architecture**:
-*   **Orchestrator:** A lightweight Python core (in `workers/al_md_kmc_worker`) that manages the AL loop, state, and task delegation.
-*   **Workers:** Docker containers specialized for heavy computational tasks.
+*   **Orchestrator:** A lightweight Python core that manages the AL loop, state, and task delegation.
+*   **Workers:** Docker containers specialized for heavy computational tasks:
+    *   `al_md_kmc_worker`: The main orchestrator worker. It also runs MD and KMC simulations using **LAMMPS**.
     *   `gen_worker`: Structure generation using PyXtal and MACE-MP relaxation.
-    *   `lammps_worker`: Molecular Dynamics (MD) and Kinetic Monte Carlo (KMC) simulations.
-    *   `dft_worker`: DFT calculations (Quantum ESPRESSO) for labeling.
-    *   `pace_worker`: Active Learning sampling (MaxVol) and Potential Training (Pacemaker).
+    *   `dft_worker`: DFT calculations (**Quantum ESPRESSO**) for labeling structures.
+    *   `pace_worker`: Active Learning sampling (MaxVol) and Potential Training (**Pacemaker**).
 
 ---
 
@@ -26,9 +26,17 @@ Ensure you have the following installed:
 *   [uv](https://github.com/astral-sh/uv) (for fast Python dependency management)
 
 You can verify your environment using the provided script:
-
 ```bash
 ./check_env.sh
+```
+
+### Pseudopotentials Setup
+
+For DFT calculations, the pipeline requires SSSP (Standard Solid State Pseudopotentials). Users must download them and place them in the appropriate directory (e.g., `./data/pseudos`).
+
+A helper script is provided to download the SSSP efficiency library:
+```bash
+./scripts/download_sssp_efficiency.sh
 ```
 
 ### Installation
@@ -39,13 +47,16 @@ You can verify your environment using the provided script:
     cd ace-active-carver
     ```
 
-2.  Build the Docker images:
+2.  Build and start the Docker services:
     ```bash
     # Using make (if available)
     make build
 
     # Or directly with Docker Compose
     docker-compose build
+    ```
+    Once built, start the services in detached mode:
+    ```bash
     docker-compose up -d
     ```
 
@@ -53,7 +64,9 @@ You can verify your environment using the provided script:
 
 See [quickstart/README.md](quickstart/README.md) for a step-by-step guide to running a demo experiment.
 
-### Running an Experiment
+---
+
+## 🔬 Running an Experiment
 
 1.  **Configure:** Edit `config.yaml` to define your system (elements, temperature, etc.).
 
@@ -78,10 +91,11 @@ See [quickstart/README.md](quickstart/README.md) for a step-by-step guide to run
     ```bash
     python3 setup_experiment.py --config config.yaml --name my_experiment --run
     ```
+---
 
-### Development & Testing
+## ⚙️ Development & Testing
 
-The project includes a comprehensive test suite.
+The project includes a comprehensive test suite accessible via `make`.
 
 *   **Run Unit Tests:**
     ```bash
@@ -112,137 +126,15 @@ The project includes a comprehensive test suite.
 ├── Makefile                # Build/Run shortcuts
 ├── shared/                 # Common Python code (Config, Utils, Potentials)
 ├── workers/                # Source code for micro-services
-│   ├── al_md_kmc_worker/   # Orchestrator & LAMMPS
+│   ├── al_md_kmc_worker/   # Orchestrator & LAMMPS/KMC
 │   ├── dft_worker/         # DFT Labeling
 │   ├── gen_worker/         # Structure Generation
 │   └── pace_worker/        # Training & Sampling
 └── tests/                  # Unit and Integration tests
 ```
 
+---
+
 ## ⚖️ License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
- The project follows a **Micro-kernel Architecture**:
- *   **Orchestrator:** A lightweight Python core (in `workers/al_md_kmc_worker`) that manages the AL loop, state, and task delegation.
- *   **Workers:** Docker containers specialized for heavy computational tasks.
-     *   `gen_worker`: Structure generation using PyXtal and MACE-MP relaxation.
-     *   `lammps_worker`: Molecular Dynamics (MD) and Kinetic Monte Carlo (KMC) simulations.
-     *   `dft_worker`: DFT calculations (Quantum ESPRESSO) for labeling.
-     *   `pace_worker`: Active Learning sampling (MaxVol) and Potential Training (Pacemaker).
-
- ---
-
- ## 🚀 Getting Started
-
- ### Prerequisites
-
- Ensure you have the following installed:
- *   [Docker](https://docs.docker.com/get-docker/)
- *   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (for GPU support)
- *   [uv](https://github.com/astral-sh/uv) (for fast Python dependency management)
-
- You can verify your environment using the provided script:
-
- ```bash
- ./check_env.sh
- ```
-
- ### Pseudopotentials Setup
-
- Users must download SSSP pseudopotentials and place them in `./pseudos` (or wherever the config expects).
- A helper script is available:
- ```bash
- ./scripts/download_sssp_efficiency.sh
- ```
-
- ### Installation
-
- 1.  Clone the repository:
-     ```bash
-     git clone https://github.com/your-org/ace-active-carver.git
-     cd ace-active-carver
-     ```
-
- 2.  Build the Docker images:
-     ```bash
-     # Using make (if available)
-     make build
-
-     # Or directly with Docker Compose
-     docker-compose build
-     docker-compose up -d
-     ```
-
- ### Quickstart
-
- See [quickstart/README.md](quickstart/README.md) for a step-by-step guide to running a demo experiment.
-
- ### Running an Experiment
-
- 1.  **Configure:** Edit `config.yaml` to define your system (elements, temperature, etc.).
-
- 2.  **Validate:** Ensure your configuration is correct.
-     ```bash
-     python3 validate_config.py config.yaml
-     ```
-
- 3.  **Setup:** Initialize the experiment directory.
-     ```bash
-     python3 setup_experiment.py --config config.yaml --name my_experiment
-     ```
-     This creates an experiment directory structure in `output/my_experiment/`.
-
- 4.  **Execute:**
-     Run the pipeline script generated in the output directory:
-     ```bash
-     ./output/my_experiment/run_pipeline.sh
-     ```
-
-     *Alternatively, you can run immediately during setup:*
-     ```bash
-     python3 setup_experiment.py --config config.yaml --name my_experiment --run
-     ```
-
- ### Development & Testing
-
- The project includes a comprehensive test suite.
-
- *   **Run Unit Tests:**
-     ```bash
-     make test
-     ```
- *   **Run Integration Tests (Mocked Docker):**
-     ```bash
-     make test-integration
-     ```
- *   **Clean Environment:**
-     ```bash
-     make clean
-     ```
-
- ---
-
- ## 📂 Directory Structure
-
- ```text
- .
- ├── config.yaml             # Main experiment configuration
- ├── config_meta.yaml        # Environment-specific settings (Docker tags, commands)
- ├── setup_experiment.py     # Entry point script
- ├── validate_config.py      # Configuration validation script
- ├── docker-compose.yml      # Orchestration definition
- ├── check_env.sh            # Environment verification script
- ├── quickstart/             # Quickstart guide and demo resources
- ├── Makefile                # Build/Run shortcuts
- ├── shared/                 # Common Python code (Config, Utils, Potentials)
- ├── workers/                # Source code for micro-services
- │   ├── al_md_kmc_worker/   # Orchestrator & LAMMPS
- │   ├── dft_worker/         # DFT Labeling
- │   ├── gen_worker/         # Structure Generation
- │   └── pace_worker/        # Training & Sampling
- └── tests/                  # Unit and Integration tests
- ```
-
- ## ⚖️ License
-
- This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
