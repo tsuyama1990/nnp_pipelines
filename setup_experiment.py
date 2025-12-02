@@ -18,31 +18,38 @@ import os
 import logging
 import shutil
 import subprocess
+import re
 from typing import Optional
 
-# Add the worker src to path so we can import the orchestrator if needed locally
-sys.path.append(os.path.join(os.path.dirname(__file__), "workers/al_md_kmc_worker/src"))
-
 # Updated import path for Unified Worker
+# We only need ExperimentSetup for setup logic.
+# Execution is handled via subprocess now.
+sys.path.append(os.path.join(os.path.dirname(__file__), "workers/al_md_kmc_worker/src"))
 from workers.al_md_kmc_worker.src.setup.experiment_setup import ExperimentSetup
-from workers.al_md_kmc_worker.src.main import run_active_learning
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-class PipelineArgs:
-    """Helper class to mimic argparse arguments needed by run_active_learning."""
-    def __init__(self, config: str, meta_config: str, resume_iteration: Optional[int] = None):
-        self.config = config
-        self.meta_config = meta_config
-        self.resume_iteration = resume_iteration
+ROOT_DIR = pathlib.Path(__file__).parent.resolve()
+
+def check_secure_path(path_str: str, base_dir: pathlib.Path = ROOT_DIR) -> pathlib.Path:
+    """
+    Resolves a path and ensures it is safely within the expected base directory.
+    Prevents directory traversal attacks.
+    """
+    path = pathlib.Path(path_str).resolve()
+    # Check if path is relative to base_dir
+    # For safety, we allow paths inside the repo root.
+    if not path.is_relative_to(base_dir):
+        # Exception: system paths like /usr/bin/docker are allowed if we were checking executables,
+        # but here we check config/resume paths.
+        raise PermissionError(f"Path traversal detected! {path} is outside allowed root {base_dir}")
+    return path
 
 def ensure_meta_config(path: pathlib.Path):
     """
     Ensures that the meta configuration file exists in the project root.
-    If it doesn't exist, it creates it with robust default values including
-    Docker image tags and execution commands.
     """
     if not path.exists():
         logger.warning(f"Meta config not found at {path}. Creating default template with Docker tags. PLEASE REVIEW THIS FILE.")
@@ -79,6 +86,12 @@ def check_docker() -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
+
+def sanitize_exp_name(name: str) -> str:
+    """Sanitizes experiment name to prevent shell injection in scripts."""
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+        raise ValueError(f"Invalid experiment name: {name}. Only alphanumeric, underscore, and hyphen allowed.")
+    return name
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -122,36 +135,27 @@ def generate_run_script(setup: ExperimentSetup, use_local_mode: bool):
     """Generates the run_pipeline.sh script based on the execution mode."""
     run_script_path = setup.exp_dir / "run_pipeline.sh"
 
-    # Paths relative to the experiment directory (where the script will run)
-    config_rel = "configs/07_active_learning.yaml"
-    meta_config_rel = "configs/config_meta.yaml"
-
-    # We need to determine the root directory of the repo relative to the experiment dir
-    # Experiment dir is typically project_root/<exp_name> or project_root/experiments/<exp_name>
-    # The setup script is in project_root.
-    # We can use the location of setup_experiment.py to find the root.
+    # Sanitize name just in case
+    safe_name = sanitize_exp_name(setup.exp_name)
 
     if use_local_mode:
         logger.info("Generating local execution script (Docker disabled/not found).")
-        # Assuming uv is available as per prompt requirements
-        # Command: uv run python workers/al_md_kmc_worker/src/main.py start_loop ...
-        # We need to set PYTHONPATH to include the project root so shared/ modules are found
 
         content = f"""#!/bin/bash
 # Generated Pipeline Script (Local Mode)
 set -e
 
-echo "Starting Pipeline for experiment: {setup.exp_name} (Local Mode)"
+echo "Starting Pipeline for experiment: {safe_name} (Local Mode)"
 
-# Get the directory of this script
-SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
-# Assuming standard structure: <repo_root>/<experiment_dir>/run_pipeline.sh
-# We need to find the repo root.
-# Let's try to find 'setup_experiment.py' to locate root.
+# Get the directory of this script (experiment root)
+EXP_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
+SCRIPT_DIR="$EXP_DIR"
 
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+# Locate Repo Root
+# We assume setup_experiment.py is in Repo Root.
+REPO_ROOT="$(dirname "$EXP_DIR")"
+# Adjust if experiment dir is deeper (e.g. experiments/name)
 if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
-    # try one level up
     REPO_ROOT="$(dirname "$REPO_ROOT")"
 fi
 
@@ -161,76 +165,52 @@ if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
 fi
 
 echo "Repository Root: $REPO_ROOT"
-cd "$REPO_ROOT"
-
-# Ensure dependencies are installed (optional, but good for local mode)
-# uv sync
 
 export PYTHONPATH="$REPO_ROOT:$PYTHONPATH"
 
+# Relative paths for config inside the experiment dir
+CONFIG_REL="configs/07_active_learning.yaml"
+META_REL="configs/config_meta.yaml"
+
 echo "Running Active Learning Loop..."
-uv run python workers/al_md_kmc_worker/src/main.py start_loop \\
-    --config "$SCRIPT_DIR/{config_rel}" \\
-    --meta-config "$SCRIPT_DIR/{meta_config_rel}"
+# Pass absolute paths to the worker, running from Experiment Directory as CWD
+cd "$EXP_DIR"
+
+uv run python "$REPO_ROOT/workers/al_md_kmc_worker/src/main.py" start_loop \\
+    --config "$EXP_DIR/$CONFIG_REL" \\
+    --meta-config "$EXP_DIR/$META_REL"
 
 echo "Pipeline finished successfully."
 """
     else:
         logger.info("Generating Docker execution script.")
-        # Docker Mode
-        # We need to run the pace_worker (or al_md_kmc_worker) container.
-        # The prompt says: docker run ... al_md_kmc_worker start_loop ...
-        # We need to mount the repo root to /app (or proper paths).
-        # And mount the experiment directory.
-
-        # NOTE: The current codebase seems to assume 'al_md_kmc_worker' image is available or built.
-        # The meta config has image names.
-
-        # We'll use a simplified docker run command that mirrors what likely happens.
-        # Assuming the image is 'pace_worker:latest' (based on default meta) or we should use 'al_md_kmc_worker' as per prompt.
-        # The prompt explicitly mentioned `al_md_kmc_worker` in the task description.
-        # But `ensure_meta_config` uses `pace_worker:latest`.
-        # I will use the value from setup.root_config['experiment'].get('docker', {}).get('pace_image', 'pace_worker:latest')
-        # but setup.root_config is the experiment config, not meta.
-        # The meta config is handled separately.
-        # I'll stick to a safe default 'pace_worker:latest' if not specified, but the prompt said 'al_md_kmc_worker'.
-        # I will use 'pace_worker:latest' as that is what `ensure_meta_config` writes, and it seems the worker is unified.
-
-        # We need to mount the current directory (repo root) to /app to access code if it's developing,
-        # OR just mount the experiment dir to /app/work.
+        image = "pace_worker:latest" # Default, or fetch from meta if parsed
 
         content = f"""#!/bin/bash
 # Generated Pipeline Script (Docker Mode)
 set -e
 
-echo "Starting Pipeline for experiment: {setup.exp_name} (Docker Mode)"
+echo "Starting Pipeline for experiment: {safe_name} (Docker Mode)"
 
-SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+EXP_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
+REPO_ROOT="$(dirname "$EXP_DIR")"
 if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
     REPO_ROOT="$(dirname "$REPO_ROOT")"
 fi
 
 echo "Repository Root: $REPO_ROOT"
-
-# Determine Docker Image (using default if not set)
-        IMAGE="lammps_worker:latest"
-
+IMAGE="{image}"
 echo "Using Docker Image: $IMAGE"
 
-        # We mount the repo root to /app so that 'shared' and 'workers' are available.
-        # We also mount the experiment directory data to /app/work.
-
-        # We use 'docker exec' if the container is running (via docker-compose) or 'docker run' if ephemeral.
-        # The prompt suggests seamless 'make up' experience which uses docker-compose.
-        # However, for a simple run script, 'docker run' is more robust if the stack isn't up.
-        # We will use 'docker run' as requested for validity.
+# Mount repo to /app, experiment to /app/work (conceptually)
+# But worker expects to run inside /app/work?
+# Actually, the worker script path in docker is /app/workers/al_md_kmc_worker/src/main.py if we mount repo to /app.
 
 docker run --rm -it \\
     --gpus all \\
     --user $(id -u):$(id -g) \\
     -v "$REPO_ROOT:/app" \\
-    -v "$SCRIPT_DIR:/app/work" \\
+    -v "$EXP_DIR:/app/work" \\
     -w /app/work \\
     $IMAGE \\
     python /app/workers/al_md_kmc_worker/src/main.py start_loop \\
@@ -250,7 +230,7 @@ def main():
     args = parse_args()
 
     # Step 0: Ensure config_meta.yaml exists in the project root
-    root_meta_path = pathlib.Path("config_meta.yaml")
+    root_meta_path = ROOT_DIR / "config_meta.yaml"
     ensure_meta_config(root_meta_path)
 
     # Determine execution mode
@@ -264,7 +244,13 @@ def main():
 
     if args.resume:
         # Resume mode
-        resume_path = pathlib.Path(args.resume).resolve()
+        # Fix Path Traversal
+        try:
+            resume_path = check_secure_path(args.resume)
+        except PermissionError as e:
+            logger.error(str(e))
+            sys.exit(1)
+
         logger.info(f"Resuming experiment from: {resume_path}")
 
         if not (resume_path / "work" / "07_active_learning").exists() and not (resume_path / "configs").exists():
@@ -273,19 +259,7 @@ def main():
              sys.exit(1)
 
         experiment_root = resume_path
-        state_path = experiment_root / "work" / "07_active_learning" / "experiment_state.json"
-
-        if not state_path.exists():
-             state_path_alt = experiment_root / "work" / "experiment_state.json"
-             if state_path_alt.exists():
-                 state_path = state_path_alt
-             else:
-                 logger.error(f"Experiment state file not found at {state_path} or {state_path_alt}.")
-                 logger.error("Cannot resume without a valid state file.")
-                 sys.exit(1)
-
-        logger.info(f"Found experiment state at: {state_path}")
-        logger.info(f"Confirmed experiment root: {experiment_root}")
+        # Fix: Do not chdir. Use absolute paths.
 
         config_path = experiment_root / "configs" / "07_active_learning.yaml"
         meta_config_path = experiment_root / "configs" / "config_meta.yaml"
@@ -294,67 +268,85 @@ def main():
             logger.error(f"Could not find configuration at {config_path}")
             sys.exit(1)
 
-        os.chdir(experiment_root)
+        # Run logic (same as --run)
+        logger.info("Starting active learning loop (RESUME)...")
 
-        # In resume mode, we still just run the orchestrator.
-        # If user passed --run, we run it directly in this process (if local) or via docker?
-        # The original code ran it directly:
-        # run_active_learning(pipeline_args)
+        # Prepare environment
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT_DIR) + os.pathsep + env.get("PYTHONPATH", "")
 
-        # If we are just setting up the resume script, we should probably generate/update the run script?
-        # But --resume implies running typically?
-        # The prompt says "The generated `run_pipeline.sh` creates recursive loops by calling `setup --resume`"
-        # So we should avoid that.
+        cmd = [
+            sys.executable,
+            str(ROOT_DIR / "workers/al_md_kmc_worker/src/main.py"),
+            "start_loop",
+            "--config", str(config_path),
+            "--meta-config", str(meta_config_path)
+        ]
 
-        # If args.resume is used, we usually just want to RUN.
-        # But if the user wants to generate a resume SCRIPT, they might use setup_experiment logic?
-        # Typically setup_experiment.py is for SETUP.
-        # If --resume is passed, it acts as a runner in the current logic.
-
-        pipeline_args = PipelineArgs(
-            config=str(config_path.relative_to(experiment_root)),
-            meta_config=str(meta_config_path.relative_to(experiment_root)),
-            resume_iteration=args.iteration
-        )
-
-        # If local mode or running directly:
-        run_active_learning(pipeline_args)
+        try:
+            # Pass cwd=experiment_root to subprocess
+            subprocess.run(cmd, cwd=experiment_root, check=True, env=env)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Pipeline execution failed with exit code {e.returncode}")
+            sys.exit(e.returncode)
 
     else:
         # New Experiment Setup
         logger.info("Initializing new experiment...")
 
-        config_path = pathlib.Path(args.config)
-        setup = ExperimentSetup(config_path=config_path)
+        try:
+            config_path = check_secure_path(args.config)
+        except PermissionError as e:
+            logger.error(str(e))
+            sys.exit(1)
 
+        setup = ExperimentSetup(config_path=config_path)
         setup.load_configurations()
 
         if args.name:
-            logger.info(f"Overriding experiment name to: {args.name}")
-            setup.exp_name = args.name
+            # Sanitize name
+            try:
+                safe_name = sanitize_exp_name(args.name)
+            except ValueError as e:
+                logger.error(str(e))
+                sys.exit(1)
+
+            logger.info(f"Overriding experiment name to: {safe_name}")
+            setup.exp_name = safe_name
             if "experiment" not in setup.root_config:
                 setup.root_config["experiment"] = {}
-            setup.root_config["experiment"]["name"] = args.name
+            setup.root_config["experiment"]["name"] = safe_name
 
         setup.create_directory_structure()
         setup.generate_step_configs()
 
-        # Use our new function instead of the class method (or overwrite the class method if we could, but function is easier here)
         generate_run_script(setup, use_local_mode)
 
         if args.run:
             logger.info("Setup complete. Starting orchestrator immediately (--run specified)...")
             experiment_root = setup.exp_dir.resolve()
+
             config_path = experiment_root / "configs" / "07_active_learning.yaml"
             meta_config_path = experiment_root / "configs" / "config_meta.yaml"
 
-            os.chdir(experiment_root)
+            # Prepare environment
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(ROOT_DIR) + os.pathsep + env.get("PYTHONPATH", "")
 
-            pipeline_args = PipelineArgs(
-                config="configs/07_active_learning.yaml",
-                meta_config="configs/config_meta.yaml"
-            )
-            run_active_learning(pipeline_args)
+            cmd = [
+                sys.executable,
+                str(ROOT_DIR / "workers/al_md_kmc_worker/src/main.py"),
+                "start_loop",
+                "--config", str(config_path),
+                "--meta-config", str(meta_config_path)
+            ]
+
+            try:
+                # Pass cwd=experiment_root to subprocess
+                subprocess.run(cmd, cwd=experiment_root, check=True, env=env)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Pipeline execution failed with exit code {e.returncode}")
+                sys.exit(e.returncode)
         else:
             logger.info("Setup complete.")
             logger.info(f"To execute: {setup.exp_dir}/run_pipeline.sh")

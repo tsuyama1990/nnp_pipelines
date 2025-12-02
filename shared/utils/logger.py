@@ -61,7 +61,7 @@ class CSVLogger:
                         "rmse_forces",
                         "timestamp"
                     ])
-            except Exception as e:
+            except (OSError, IOError) as e:
                 logger.error(f"Failed to initialize log file {self.filepath}: {e}")
 
     def log_metrics(
@@ -98,5 +98,5 @@ class CSVLogger:
                     rmse_forces if rmse_forces is not None else "",
                     timestamp
                 ])
-        except Exception as e:
+        except (OSError, IOError) as e:
             logger.error(f"Failed to write to log file {self.filepath}: {e}")
