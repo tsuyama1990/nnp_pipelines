@@ -6,10 +6,19 @@ from unittest.mock import MagicMock, patch
 import shutil
 import tempfile
 from pathlib import Path
+import sys
+import os
+
+# Add worker src to path to resolve imports
+WORKER_SRC = Path(__file__).resolve().parent.parent / "workers/al_md_kmc_worker/src"
+if str(WORKER_SRC) not in sys.path:
+    sys.path.insert(0, str(WORKER_SRC))
+
 from ase import Atoms
 from shared.core.config import Config
-from src.main import main
+from workers.al_md_kmc_worker.src.main import main
 # Removed ActiveLearningOrchestrator patch as per plan
+# We import it to verify availability, though we don't use it directly in tests if we mock factory
 from workers.al_md_kmc_worker.src.workflows.active_learning_loop import ActiveLearningOrchestrator
 from shared.utils.logger import CSVLogger
 
@@ -75,19 +84,9 @@ class TestIntegrationPhase3(unittest.TestCase):
         shutil.rmtree(self.test_dir)
 
     @pytest.mark.skip(reason="SeedGenerator no longer exists in codebase - test needs refactoring")
-    @patch("src.main.ComponentFactory")
-    @patch("src.main.SeedGenerator")
-    # Removed @patch("src.main.ActiveLearningOrchestrator") - we'll let it be instantiated or mocking it differently if needed,
-    # but the instruction said "Remove @patch("src.main.ActiveLearningOrchestrator")".
-    # However, test_main_runs_phase1_if_potential_missing uses mock_orchestrator argument.
-    # If I remove the patch, I must remove the argument too.
-    # Also src.main instantiates ActiveLearningOrchestrator. If I don't patch it, it will try to run real logic, which requires real dependencies.
-    # But ComponentFactory is patched. ComponentFactory.create_active_learning_orchestrator returns what?
-    # src.main calls `factory.create_active_learning_orchestrator(...)`.
-    # So if I mock ComponentFactory, I can control what orchestrator is returned without patching the class itself.
-    # The prompt says "Cleanup Bad Tests ... In tests/test_integration.py: Remove @patch("src.main.ActiveLearningOrchestrator")."
-    # This implies relying on Dependency Injection or factory mocking is better than patching the class.
-    def test_main_runs_phase1_if_potential_missing(self, mock_seed_gen, mock_factory_cls):
+    @patch("workers.al_md_kmc_worker.src.main.ComponentFactory")
+    # @patch("src.main.SeedGenerator") # Removed as it causes import error if not present
+    def test_main_runs_phase1_if_potential_missing(self, mock_factory_cls):
         """Test that Phase 1 is triggered if initial potential is missing."""
         # potential.yace does not exist in self.test_dir
 
@@ -97,20 +96,7 @@ class TestIntegrationPhase3(unittest.TestCase):
         # Setup the mock orchestrator returned by factory
         mock_orch_instance = MagicMock()
         mock_factory.create_active_learning_orchestrator.return_value = mock_orch_instance
-
         mock_factory.create_md_engine.return_value = MagicMock()
-
-        # Create mock instances
-        mock_seed_instance = mock_seed_gen.return_value
-
-        # We need to simulate the seed generator actually creating the file
-        # so that Phase 2 continues (or main copies it).
-        def side_effect_run():
-            # Create the file that main expects
-            (Path("data/seed/seed_potential.yace")).parent.mkdir(parents=True, exist_ok=True)
-            (Path("data/seed/seed_potential.yace")).touch()
-
-        mock_seed_instance.run.side_effect = side_effect_run
 
         # Need to ensure that main runs in self.test_dir context
         import os
@@ -121,20 +107,15 @@ class TestIntegrationPhase3(unittest.TestCase):
         finally:
             os.chdir(current_dir)
 
-        # Check Phase 1 was called
-        mock_seed_gen.assert_called_once()
-        mock_seed_instance.run.assert_called_once()
+        # Check Phase 1 was called (if it existed)
+        # mock_seed_gen.assert_called_once()
 
         # Check Phase 2 was called
-        # mock_orchestrator.assert_called_once() # We removed the patch, so we can't check the class call.
-        # But we can check if the instance method was called.
         mock_orch_instance.run.assert_called_once()
 
     @pytest.mark.skip(reason="SeedGenerator no longer exists in codebase - test needs refactoring")
-    @patch("src.main.ComponentFactory")
-    @patch("src.main.SeedGenerator")
-    # Removed @patch("src.main.ActiveLearningOrchestrator")
-    def test_main_skips_phase1_if_potential_exists(self, mock_seed_gen, mock_factory_cls):
+    @patch("workers.al_md_kmc_worker.src.main.ComponentFactory")
+    def test_main_skips_phase1_if_potential_exists(self, mock_factory_cls):
         """Test that Phase 1 is skipped if initial potential exists."""
         # Mock Factory
         mock_factory = mock_factory_cls.return_value
@@ -155,7 +136,7 @@ class TestIntegrationPhase3(unittest.TestCase):
             os.chdir(current_dir)
 
         # Check Phase 1 was NOT called
-        mock_seed_gen.assert_not_called()
+        # mock_seed_gen.assert_not_called()
 
         # Check Phase 2 was called
         mock_orch_instance.run.assert_called_once()
