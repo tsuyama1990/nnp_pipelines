@@ -1,140 +1,118 @@
-"""
-Integration Test for Real Execution
-This test executes the actual `setup_experiment.py` script to verify it works
-without mocking internal logic, assuming Local Mode (Phase 4).
-"""
-
-import sys
-import subprocess
 import os
+import shutil
+import subprocess
+import sys
+import yaml
 import pytest
 from pathlib import Path
-import shutil
-import yaml
 
-# Ensure we are testing the actual code in the repo
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Locate repo root
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SETUP_SCRIPT = REPO_ROOT / "setup_experiment.py"
+DEMO_CONFIG = REPO_ROOT / "quickstart/demo_config.yaml"
+OUTPUT_DIR = REPO_ROOT / "output"
 
 @pytest.fixture
-def safe_env():
+def test_context():
     """
-    Creates a clean environment for execution inside REPO_ROOT/output
-    to pass security checks in setup_experiment.py.
+    Sets up a test context.
+    We use the repo root as CWD because setup_experiment.py expects to be run from there
+    (and ExperimentSetup creates dirs in CWD by default).
+    We ensure we clean up the created experiment directory.
     """
-    base = REPO_ROOT / "output" / "test_execution"
-    if base.exists():
-        shutil.rmtree(base)
-    base.mkdir(parents=True, exist_ok=True)
-    yield base
-    # Cleanup (optional, useful to keep for debugging if failed)
-    # if base.exists():
-    #     shutil.rmtree(base)
+    OUTPUT_DIR.mkdir(exist_ok=True)
 
-def test_real_execution_local_mode(safe_env):
-    """
-    Test that setup_experiment.py runs successfully in local mode
-    and generates the expected files.
-    """
+    # We will name the experiment 'test_run'
+    # So it will create 'experiment_test_run' in CWD (REPO_ROOT)
+    exp_dir_name = "experiment_test_run"
+    exp_dir = REPO_ROOT / exp_dir_name
 
-    # 1. Prepare Configuration
-    # We use quickstart/demo_config.yaml but modify output_dir
-    config_src = REPO_ROOT / "quickstart" / "demo_config.yaml"
-    # Config MUST be inside REPO_ROOT to pass check_secure_path
-    config_dest = safe_env / "test_config.yaml"
+    # Pre-cleanup
+    if exp_dir.exists():
+        shutil.rmtree(exp_dir)
 
-    with open(config_src) as f:
+    yield exp_dir
+
+    # Post-cleanup
+    if exp_dir.exists():
+        shutil.rmtree(exp_dir)
+
+def test_real_execution_demo(test_context):
+    """
+    Runs setup_experiment.py with the demo configuration.
+    Verifies that the script executes successfully and creates the expected artifacts.
+    """
+    assert SETUP_SCRIPT.exists(), "setup_experiment.py not found"
+    assert DEMO_CONFIG.exists(), "demo_config.yaml not found"
+
+    # Prepare a modified config file
+    with open(DEMO_CONFIG, 'r') as f:
         config = yaml.safe_load(f)
 
-    # Update output directory to be inside our safe env
-    config["experiment"]["output_dir"] = str(safe_env)
-    config["experiment"]["name"] = "test_run"
+    # We set name to 'test_run'
+    config['experiment']['name'] = "test_run"
 
-    # Fix technical debt in demo_config.yaml (missing Pydantic fields)
-    if "pressure" not in config["md_params"]:
-        config["md_params"]["pressure"] = 0.001
+    # Patch missing fields to satisfy Pydantic strict validation
+    if 'md_params' in config:
+        config['md_params']['pressure'] = 1.0
+        config['md_params']['initial_structure'] = "initial.data"
+        config['md_params']['masses'] = {"Al": 26.98, "Cu": 63.55}
+        config['md_params']['n_steps'] = 10
 
-    # Create a dummy structure file
-    dummy_xyz = safe_env / "initial.xyz"
-    dummy_xyz.write_text("2\n\nAl 0.0 0.0 0.0\nCu 2.0 0.0 0.0")
-    config["md_params"]["initial_structure"] = str(dummy_xyz)
+    if 'al_params' in config:
+        config['al_params']['gamma_threshold'] = 0.1
+        config['al_params']['potential_yaml_path'] = "potential.yaml"
+        config['al_params']['initial_potential'] = "potential.yace"
 
-    if "masses" not in config["md_params"]:
-         config["md_params"]["masses"] = {"Al": 26.98, "Cu": 63.55}
-
-    if "gamma_threshold" not in config["al_params"]:
-        config["al_params"]["gamma_threshold"] = 0.2
-
-    config["al_params"]["initial_potential"] = "dummy.yace"
-    config["al_params"]["potential_yaml_path"] = "dummy.yaml"
-
-    # Limit iterations to prevent infinite run
-    config["al_params"]["max_iterations"] = 1
-
-    with open(config_dest, "w") as f:
+    # Save the test config INSIDE the repo (in output dir)
+    test_config_path = OUTPUT_DIR / "test_config.yaml"
+    with open(test_config_path, 'w') as f:
         yaml.dump(config, f)
 
-    # 2. Execute setup_experiment.py
-    # We run it as a subprocess
-    cmd = [
-        sys.executable,
-        str(REPO_ROOT / "setup_experiment.py"),
-        "--config", str(config_dest),
-        "--run",
-        "--local" # Force local mode
-    ]
+    # Create dummy initial.data in CWD (REPO_ROOT)
+    dummy_structure = REPO_ROOT / "initial.data"
+    dummy_structure.touch()
 
-    # We need to set PYTHONPATH so it can find shared/ and workers/
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    try:
+        # Construct command
+        cmd = [
+            sys.executable,
+            str(SETUP_SCRIPT),
+            "--config", str(test_config_path),
+            "--name", "test_run",
+            "--run"
+        ]
 
-    # Run from REPO_ROOT so it finds config_meta.yaml if needed
-    result = subprocess.run(
-        cmd,
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True
-    )
+        # Run the script
+        result = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+        )
 
-    # Check stdout/stderr if it fails
-    if result.returncode != 0:
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+        if result.returncode != 0:
+            print("STDOUT:\n", result.stdout)
+            print("STDERR:\n", result.stderr)
 
-    # We assert success. If it fails due to missing dependencies (like e3nn/torch issues seen in logs),
-    # we might need to adjust expectation.
-    # The previous log showed "Pipeline execution failed with exit code 1" due to Pydantic validation.
-    # If it fails now due to Torch/Hardware, that's different.
-    assert result.returncode == 0, "setup_experiment.py failed"
+        assert result.returncode == 0, f"Script failed with exit code {result.returncode}"
 
-    # 3. Verify Output
-    exp_dir = safe_env / "test_run"
-    # If setup added prefix, we might fail here.
-    # But based on code reading, it should be output_dir / name.
+        # Verify artifacts
+        exp_dir = test_context
+        assert exp_dir.exists(), f"Experiment directory not created at {exp_dir}"
 
-    if not exp_dir.exists():
-        # Debugging: List directories in safe_env
-        print(f"Contents of {safe_env}:")
-        for p in safe_env.iterdir():
-            print(p)
+        # Check for run script
+        assert (exp_dir / "run_pipeline.sh").exists(), "run_pipeline.sh not found"
 
-    assert exp_dir.exists(), "Experiment directory not created"
+        # Check for Step Configs
+        assert (exp_dir / "configs" / "07_active_learning.yaml").exists()
 
-    # Check for run script
-    assert (exp_dir / "run_pipeline.sh").exists()
+        # Check for Experiment State or Log
+        # We check for training_log.csv which is initialized early
+        assert (exp_dir / "training_log.csv").exists(), "training_log.csv not found"
 
-    # Check for configs
-    assert (exp_dir / "configs" / "07_active_learning.yaml").exists()
-
-    # Check for state file
-    state_file = exp_dir / "data" / "experiment_state.json"
-    if not state_file.exists():
-         if (exp_dir / "work" / "experiment_state.json").exists():
-             state_file = exp_dir / "work" / "experiment_state.json"
-
-    # If the orchestrator runs but crashes due to missing LAMMPS/DFT binary in local mode,
-    # the state file might not be flushed.
-    # But we want to ensure the SCRIPT ran.
-    # The return code 0 confirms it ran.
-    # We can check logs?
-    pass
+    finally:
+        # Cleanup dummy structure
+        if dummy_structure.exists():
+            dummy_structure.unlink()

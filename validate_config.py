@@ -47,13 +47,13 @@ def validate_config(config_path: str) -> bool:
 
     try:
         with open(path, 'r') as f:
-            # Fix 1: Use safe_load to prevent code execution
+            # Use safe_load to prevent code execution
             config = yaml.safe_load(f)
-    except Exception as e:
+    except yaml.YAMLError as e:
         logger.error(f"Failed to parse YAML: {e}")
         return False
 
-    # Fix 2: Strict type checking for the root object
+    # Strict type checking for the root object
     if not isinstance(config, dict):
         logger.error("Config must be a dictionary.")
         return False
@@ -136,9 +136,7 @@ def validate_config(config_path: str) -> bool:
                 if box_size < min_box:
                     msg = f"al_params.box_size ({box_size}) is too small. Must be >= 2*cutoff + 2.0 ({min_box})."
                     logger.error(msg)
-                    # We can choose to fail validation or just log error. The prompt says 'raise ValueError' context in fix?
-                    # No, the context said "if not isinstance(config, dict): raise ValueError(...)".
-                    # For logic errors, logging False is fine for this script.
+                    # We can choose to fail validation or just log error.
                     valid = False
 
         # initial_potential can be null (None) or string. If key exists, check type.
