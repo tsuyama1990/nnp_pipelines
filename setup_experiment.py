@@ -184,7 +184,7 @@ echo "Pipeline finished successfully."
 """
     else:
         logger.info("Generating Docker execution script.")
-        image = "pace_worker:latest" # Default, or fetch from meta if parsed
+        image = "al_md_kmc_worker:latest" # Default, or fetch from meta if parsed
 
         content = f"""#!/bin/bash
 # Generated Pipeline Script (Docker Mode)
@@ -202,18 +202,16 @@ echo "Repository Root: $REPO_ROOT"
 IMAGE="{image}"
 echo "Using Docker Image: $IMAGE"
 
-# Mount repo to /app, experiment to /app/work (conceptually)
-# But worker expects to run inside /app/work?
-# Actually, the worker script path in docker is /app/workers/al_md_kmc_worker/src/main.py if we mount repo to /app.
+# We do NOT mount REPO_ROOT to /app because it would shadow the container's source code.
+# The container image al_md_kmc_worker:latest already contains the source at /app/src.
 
 docker run --rm -it \\
     --gpus all \\
     --user $(id -u):$(id -g) \\
-    -v "$REPO_ROOT:/app" \\
     -v "$EXP_DIR:/app/work" \\
     -w /app/work \\
     $IMAGE \\
-    python /app/workers/al_md_kmc_worker/src/main.py start_loop \\
+    python /app/src/main.py start_loop \\
     --config configs/07_active_learning.yaml \\
     --meta-config configs/config_meta.yaml
 
