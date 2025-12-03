@@ -26,7 +26,7 @@ class TestMDService(unittest.TestCase):
 
         self.service = MDService(self.mock_md_engine, self.mock_config)
 
-    @patch('orchestrator.src.services.md_service.ParallelExecutor')
+    @patch('workers.al_md_kmc_worker.src.services.md_service.ParallelExecutor')
     def test_run_walkers_parallel_delegation(self, MockExecutor):
         # Mock executor to return a successful result immediately
         mock_executor_instance = MockExecutor.return_value
@@ -39,7 +39,7 @@ class TestMDService(unittest.TestCase):
         ]
 
         # Mock reading atoms
-        with patch('orchestrator.src.services.md_service.read') as mock_read:
+        with patch('workers.al_md_kmc_worker.src.services.md_service.read') as mock_read:
             atoms = Atoms('H2')
             atoms.arrays['f_2'] = 0.1 # low gamma
             mock_read.return_value = [atoms]

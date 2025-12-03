@@ -3,12 +3,13 @@ import pytest
 from shared.core.config import Config, LJParams, MDParams, MetaConfig
 from ase.data import covalent_radii, atomic_numbers
 from pathlib import Path
+from pydantic import ValidationError
 
 # Create a dummy meta config for testing
 @pytest.fixture
 def dummy_meta_config():
     return MetaConfig(
-        dft={"command": "pw.x", "pseudo_dir": ".", "sssp_json_path": "sssp.json"},
+        dft={"command": "pw.x"},
         lammps={"command": "lmp_serial"}
     )
 
@@ -39,6 +40,18 @@ def test_config_from_dict_explicit_lj_params(dummy_meta_config):
             "epsilon": 0.5,
             "sigma": 2.0,
             "cutoff": 5.0
+        },
+        "exploration": {
+            "strategy": "hybrid"
+        },
+        "training_params": {
+            "replay_ratio": 1.0,
+            "global_dataset_path": "data/global_dataset.pckl"
+        },
+        "ace_model": {
+            "pacemaker_config": {},
+            "initial_potentials": [],
+            "delta_learning_mode": True
         },
         "seed": 123
     }
@@ -73,6 +86,18 @@ def test_config_from_dict_generated_lj_params(dummy_meta_config):
         "dft_params": {
             "ecutwfc": 50,
             "kpts": [1, 1, 1],
+        },
+        "exploration": {
+            "strategy": "hybrid"
+        },
+        "training_params": {
+            "replay_ratio": 1.0,
+            "global_dataset_path": "data/global_dataset.pckl"
+        },
+        "ace_model": {
+            "pacemaker_config": {},
+            "initial_potentials": [],
+            "delta_learning_mode": True
         }
         # lj_params MISSING
     }
@@ -119,12 +144,23 @@ def test_config_fails_if_no_elements_and_no_lj_params(dummy_meta_config):
         "dft_params": {
             "ecutwfc": 50,
             "kpts": [1, 1, 1],
+        },
+        "exploration": {
+            "strategy": "hybrid"
+        },
+        "training_params": {
+            "replay_ratio": 1.0,
+            "global_dataset_path": "data/global_dataset.pckl"
+        },
+        "ace_model": {
+            "pacemaker_config": {},
+            "initial_potentials": [],
+            "delta_learning_mode": True
         }
         # lj_params MISSING
     }
 
-    # This should fail.
-    # Either MDParams raises TypeError (missing elements) or LJParams raises TypeError (missing args)
-    # We just ensure it raises TypeError
-    with pytest.raises(TypeError):
+    # This should fail because md_params.elements is missing
+    # Pydantic will raise ValidationError, not TypeError
+    with pytest.raises(ValidationError):
         Config.from_dict(config_dict, dummy_meta_config)

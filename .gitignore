@@ -6,3 +6,5 @@ __pycache__/
 debug_dump/
 output/
 pseudos/
+.aider*
+config_meta.yaml

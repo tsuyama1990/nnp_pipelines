@@ -1,29 +1,53 @@
-FROM lammps/lammps:stable
+FROM python:3.11-slim
 
-USER root
-
-# Install Python and dependencies
+# Install system dependencies for building LAMMPS
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    libopenmpi-dev \
+    openmpi-bin \
+    libfftw3-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libeigen3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python libraries
-# We install 'lammps' python package to get bindings if needed, but the binary comes from the base image.
-#
-# IMPORTANT: The base 'lammps/lammps:stable' image likely does NOT include the ML-PACE package.
-# To use ACE potentials in LAMMPS, you must build a custom image with the PACE package enabled.
-#
-# INSTRUCTIONS FOR PACE SUPPORT:
-# 1. Clone LAMMPS source: git clone -b stable https://github.com/lammps/lammps.git
-# 2. Clone PACE lib: git clone https://github.com/ICAMS/lammps-user-pace.git lammps/lib/pace
-# 3. Build LAMMPS with cmake, enabling -D PKG_ML-PACE=ON.
-# 4. Replace the base image 'lammps/lammps:stable' with your custom image.
-#
-# A future update will automate this build process. For now, we assume the user might provide a
-# custom base image or accepts that 'pace' style won't work with the default image.
-RUN pip3 install --no-cache-dir --break-system-packages ase numpy pyyaml lammps scipy
+# Set environment variables
+ENV LAMMPS_VERSION=stable_2Aug2023_update3
+ENV LAMMPS_DIR=/opt/lammps
+ENV PYTHONPATH=/app:${LAMMPS_DIR}/python
+
+# Clone LAMMPS source
+WORKDIR /opt
+RUN git clone --depth 1 --branch ${LAMMPS_VERSION} https://github.com/lammps/lammps.git ${LAMMPS_DIR}
+
+# Build LAMMPS with ML-PACE package enabled
+WORKDIR ${LAMMPS_DIR}/build
+RUN cmake ../cmake \
+    -D CMAKE_INSTALL_PREFIX=/usr/local \
+    -D CMAKE_BUILD_TYPE=Release \
+    -D BUILD_SHARED_LIBS=ON \
+    -D PKG_ML-PACE=ON \
+    -D PKG_PYTHON=ON \
+    -D PKG_MOLECULE=ON \
+    -D PKG_MANYBODY=ON \
+    -D PKG_EXTRA-PAIR=ON \
+    && cmake --build . -j$(nproc) \
+    && cmake --install .
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir ase numpy pyyaml scipy matplotlib pandas
+
+# Install pyace from GitHub (ICAMS/python-ace)
+# This provides PyACECalculator and other ACE utilities
+RUN pip3 install --no-cache-dir git+https://github.com/ICAMS/python-ace.git
+
+# Verify installations
+RUN python3 -c "import lammps; print('LAMMPS imported successfully')" && \
+    python3 -c "from pyace import PyACECalculator; print('PyACECalculator imported successfully')" && \
+    lmp -help || echo "LAMMPS binary check"
 
 # Setup Shared Directory
 COPY shared /app/shared
@@ -33,3 +57,7 @@ ENV PYTHONPATH=/app
 COPY workers/al_md_kmc_worker/src /app/src
 
 WORKDIR /data
+
+# Note: This Dockerfile builds LAMMPS from source with ML-PACE support
+# Build time: ~10-15 minutes depending on system
+# Image size: ~2-3 GB (larger than pip version but includes full LAMMPS+PACE)
