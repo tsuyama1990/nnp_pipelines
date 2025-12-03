@@ -39,12 +39,25 @@ A helper script is provided to download the SSSP efficiency library:
 ./scripts/download_sssp_efficiency.sh
 ```
 
+### Quickstart
+
+For a quick verification of the environment and a demo run:
+
+```bash
+# 1. Check Env
+./check_env.sh
+# 2. Build
+make build
+# 3. Run Demo
+uv run setup_experiment.py --config quickstart/demo_config.yaml --name demo_al --run
+```
+
 ### Installation
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-org/ace-active-carver.git
-    cd ace-active-carver
+    git clone https://github.com/tsuyama1990/nnp_pipelines.git
+    cd nnp_pipelines
     ```
 
 2.  Check Environment:
@@ -52,15 +65,13 @@ A helper script is provided to download the SSSP efficiency library:
     ./check_env.sh
     ```
 
-3.  Build and start the Docker services:
+3.  **Download Physics Data:** Run `./scripts/download_sssp_efficiency.sh` to fetch required pseudopotentials.
+
+4.  Build and start the Docker services:
     ```bash
     make build
     make up
     ```
-
-### Quickstart
-
-See [quickstart/README.md](quickstart/README.md) for a step-by-step guide to running a demo experiment.
 
 ---
 
