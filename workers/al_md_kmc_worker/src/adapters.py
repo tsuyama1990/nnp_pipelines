@@ -3,10 +3,13 @@ import shutil
 import uuid
 import pickle
 import json
+import logging
 from typing import List, Tuple, Optional, Any, Dict
 from pathlib import Path
 from ase import Atoms
 from ase.io import read, write
+
+logger = logging.getLogger(__name__)
 
 from shared.core.interfaces import MDEngine, Sampler, StructureGenerator, Labeler, Trainer, KMCResult, KMCEngine, Validator
 from shared.core.enums import SimulationState
@@ -24,14 +27,26 @@ class DockerMDEngine(MDEngine):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
+        # Load config to get steps and gamma_threshold
+        from shared.core.config import Config
+        # Use local_data_dir (which is always set) instead of host_work_dir (which may be None in local mode)
+        config_path = wrapper.local_data_dir / config_filename
+        meta_config_path = wrapper.local_data_dir / meta_config_filename
+        meta_config = Config.load_meta(meta_config_path)
+        self.config = Config.load_experiment(config_path, meta_config)
 
-    def run(self, potential_path: str, steps: int, gamma_threshold: float,
-            input_structure: str, is_restart: bool = False) -> SimulationState:
-
+    def run(self, structure_path: str, potential_path: str, temperature: float,
+            pressure: float, seed: int) -> Optional[Path]:
+        """Run MD simulation and return path to dump file."""
+        
         pot_name = Path(potential_path).name
-        struct_name = Path(input_structure).name
+        struct_name = Path(structure_path).name
 
         try:
+            # Get steps and gamma from config
+            steps = self.config.md_params.n_steps
+            gamma_threshold = self.config.al_params.gamma_threshold
+            
             self.wrapper.run_md(
                 config_filename=self.config_filename,
                 meta_config_filename=self.meta_config_filename,
@@ -39,18 +54,26 @@ class DockerMDEngine(MDEngine):
                 structure_filename=struct_name,
                 steps=steps,
                 gamma=gamma_threshold,
-                restart=is_restart
+                restart=False
             )
-            return SimulationState.COMPLETED
+            
+            # Return path to dump file
+            # The dump file is typically written to the data directory
+            dump_file = self.wrapper.local_data_dir / "dump.lammpstrj"
+            if dump_file.exists():
+                return dump_file
+            return None
+            
         except Exception as e:
-            return SimulationState.FAILED
+            logger.error(f"DockerMDEngine failed: {e}")
+            return None
 
 class DockerLabeler(Labeler):
     def __init__(self, wrapper: DftWorker, config_filename: str, meta_config_filename: str):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
+        self.host_data_dir = wrapper.local_data_dir
 
     def label(self, structure: Atoms) -> Optional[Atoms]:
         input_name = get_unique_filename("label_input", ".xyz")
@@ -122,7 +145,7 @@ class DockerSampler(Sampler):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_work_dir # Corrected to host_work_dir or handle absence
+        self.host_data_dir = wrapper.local_data_dir
 
     def sample(self, **kwargs) -> List[Tuple[Atoms, int]]:
         candidates = kwargs.get("structures", []) # API changed in orchestrator call? Check orchestrator logic.
@@ -159,7 +182,7 @@ class DockerStructureGenerator(StructureGenerator):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
+        self.host_data_dir = wrapper.local_data_dir
 
     def generate_cell(self, large_atoms: Atoms, center_id: int, potential_path: str) -> Atoms:
         input_name = get_unique_filename("large_structure", ".xyz")
@@ -184,7 +207,7 @@ class DockerKMCEngine(KMCEngine):
         self.wrapper = wrapper
         self.config_filename = config_filename
         self.meta_config_filename = meta_config_filename
-        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
+        self.host_data_dir = wrapper.local_data_dir
 
     def run_step(self, initial_atoms: Atoms, potential_path: str) -> KMCResult:
         input_name = get_unique_filename("kmc_input", ".xyz")
@@ -209,7 +232,7 @@ class DockerKMCEngine(KMCEngine):
 class DockerValidator(Validator):
     def __init__(self, wrapper: PaceWorker, config_filename: str, meta_config_filename: str):
         self.wrapper = wrapper
-        self.host_data_dir = wrapper.host_work_dir # Corrected from host_data_dir
+        self.host_data_dir = wrapper.local_data_dir
 
     def validate(self, potential_path: str) -> Dict[str, Any]:
         pot_name = Path(potential_path).name

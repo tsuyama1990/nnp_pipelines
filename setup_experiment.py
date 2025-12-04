@@ -337,6 +337,17 @@ def main():
                 "--meta-config", str(meta_config_path)
             ]
 
+            # --- Quickstart Hotfix: Ensure initial potential file exists ---
+            if setup.root_config:
+                al_params = setup.root_config.get("al_params", {})
+                initial_potential_name = al_params.get("initial_potential")
+                if initial_potential_name:
+                    potential_path = experiment_root / initial_potential_name
+                    if not potential_path.exists():
+                        logger.info(f"Initial potential '{initial_potential_name}' not found. Creating empty placeholder for quickstart.")
+                        potential_path.touch()
+            # -----------------------------------------------------------
+
             try:
                 # Pass cwd=experiment_root to subprocess
                 subprocess.run(cmd, cwd=experiment_root, check=True, env=env)

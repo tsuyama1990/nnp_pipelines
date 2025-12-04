@@ -31,16 +31,23 @@ ace_model:
 
 md_params:
   temperature: 300
+  pressure: 0.0
   n_steps: 1000
   timestep: 1.0
   elements: ["Al", "Cu"]
+  initial_structure: "data/initial_structure.xyz"
+  masses: {"Al": 26.98, "Cu": 63.55}
+
 
 al_params:
   n_clusters: 2
   r_core: 4.0
-  initial_potential: null
+  gamma_threshold: 0.1
+  initial_potential: "seed_potential.yace"
+  potential_yaml_path: "potential.yaml"
   num_parallel_labeling: 2
   box_size: 15.0 # Must be >= 2*5.0 + 2.0 = 12.0
+  max_iterations: 5  # Stop after 5 iterations for demo
 
 lj_params:
   epsilon: {"Al": 1.0, "Cu": 1.2}

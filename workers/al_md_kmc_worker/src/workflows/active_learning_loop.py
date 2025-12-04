@@ -170,8 +170,10 @@ class ActiveLearningOrchestrator:
                 abs_asi_path = self._resolve_path(current_asi, original_cwd) if current_asi else None
 
                 if not abs_potential_path.exists():
-                    logger.error(f"Potential file not found: {abs_potential_path}")
-                    break
+                    logger.error(f"Initial potential file not found: {abs_potential_path}")
+                    logger.error("The 'start_loop' command requires a pre-existing potential file.")
+                    logger.error("To fix this, either run a seed generation workflow to create the initial potential, or provide a valid path in your config's 'al_params.initial_potential' field.")
+                    raise HandledOrchestratorError("Initial potential not found, cannot start active learning loop.")
 
                 uncertain_structures = []
 

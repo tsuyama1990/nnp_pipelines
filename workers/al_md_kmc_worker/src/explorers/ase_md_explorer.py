@@ -94,6 +94,6 @@ class AseMDExplorer(BaseExplorer):
 
         return ExplorationResult(
             status=ExplorationStatus.SUCCESS,
-            final_structure=str(Path(final_structure_path).resolve()),
+            final_structure=atoms,  # Return Atoms object, not string path
             trajectory_path=str(Path(trajectory_file).resolve())
         )

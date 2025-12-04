@@ -7,6 +7,7 @@ of the active learning loop, enabling dependency inversion and easier testing.
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple, Any, Dict
 from dataclasses import dataclass, field
+from pathlib import Path
 from ase import Atoms
 from shared.core.enums import SimulationState, KMCStatus
 
@@ -17,13 +18,24 @@ class MDEngine(ABC):
     @abstractmethod
     def run(
         self,
+        structure_path: str,
         potential_path: str,
-        steps: int,
-        gamma_threshold: float,
-        input_structure: str,
-        is_restart: bool = False,
-    ) -> SimulationState:
-        """Run the MD simulation."""
+        temperature: float,
+        pressure: float,
+        seed: int,
+    ) -> Optional[Path]:
+        """Run the MD simulation.
+        
+        Args:
+            structure_path: Path to input structure file
+            potential_path: Path to potential file
+            temperature: Simulation temperature in Kelvin
+            pressure: Simulation pressure
+            seed: Random seed for simulation
+            
+        Returns:
+            Path to dump file containing trajectory, or None if failed
+        """
         pass
 
 

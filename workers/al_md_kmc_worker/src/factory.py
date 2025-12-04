@@ -115,9 +115,29 @@ class ComponentFactory:
         wrapper = PaceWorker(self.host_data_dir)
         return DockerValidator(wrapper, self.config_path.name, self.meta_config_path.name)
 
+    def _check_docker_available(self) -> bool:
+        """Check if Docker is available and accessible."""
+        import shutil
+        import subprocess
+        if shutil.which("docker") is None:
+            return False
+        try:
+            subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return False
+
     def create_explorer(self, al_service: ActiveLearningService) -> BaseExplorer:
         """Creates the appropriate Explorer based on configuration."""
         strategy = self.config.exploration.strategy
+        
+        # Check if Docker is available
+        docker_available = self._check_docker_available()
+        
+        # Auto-fallback to ase_md if Docker is not available and strategy requires it
+        if not docker_available and strategy in ["lammps_md", "hybrid", "kmc"]:
+            logger.warning(f"Docker not available but strategy '{strategy}' requires it. Falling back to 'ase_md' strategy.")
+            strategy = "ase_md"
 
         logger.info(f"Creating explorer for strategy: {strategy}")
 
