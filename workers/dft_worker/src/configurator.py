@@ -11,7 +11,7 @@ from ase.calculators.espresso import Espresso, EspressoProfile
 from pathlib import Path
 
 from shared.core.config import DFTParams, MetaConfig
-from .heuristics import PymatgenHeuristics
+from heuristics import PymatgenHeuristics
 from shared.utils.sssp_loader import (
     load_sssp_database,
     calculate_cutoffs,
