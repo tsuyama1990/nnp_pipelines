@@ -11,10 +11,10 @@ from ase.io import read, write
 from shared.core.interfaces import Sampler, StructureGenerator, Labeler, Trainer, Validator
 from shared.core.config import Config
 from shared.autostructure.deformation import SystematicDeformationGenerator
-from workers.al_md_kmc_worker.src.utils.parallel_executor import ParallelExecutor
+from src.utils.parallel_executor import ParallelExecutor
 # MDService injection for Epic 1
-from workers.al_md_kmc_worker.src.services.md_service import MDService
-from workers.al_md_kmc_worker.src.services.baseline_optimizer import BaselineOptimizer
+from src.services.md_service import MDService
+from src.services.baseline_optimizer import BaselineOptimizer
 
 logger = logging.getLogger(__name__)
 

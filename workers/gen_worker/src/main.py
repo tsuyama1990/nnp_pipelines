@@ -29,8 +29,11 @@ def run_generate(args):
             scenarios_conf = config["scenarios"]
         elif "type" in config:
             scenarios_conf = [config]
+        elif "generation" in config and isinstance(config["generation"], dict):
+            # Support for generation.scenarios structure (main config format)
+            scenarios_conf = config["generation"].get("scenarios", [])
         else:
-            # Maybe full config with generation params
+            # Fallback: Maybe full config with generation_params
             scenarios_conf = config.get("generation_params", {}).get("scenarios", [])
     elif isinstance(config, list):
         scenarios_conf = config

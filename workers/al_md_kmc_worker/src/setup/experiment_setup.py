@@ -57,7 +57,7 @@ class ExperimentSetup:
 
     def create_directory_structure(self):
         """Creates the experiment directory structure."""
-        self.exp_dir = pathlib.Path(f"experiment_{self.exp_name}")
+        self.exp_dir = pathlib.Path(f"output/{self.exp_name}")
         self.configs_dir = self.exp_dir / "configs"
         self.data_dir = self.exp_dir / "data"
         self.work_dir = self.exp_dir / "work"
@@ -71,6 +71,10 @@ class ExperimentSetup:
         """Generates modular configuration files for each step."""
         if not self.configs_dir:
             raise RuntimeError("Directories not created. Call create_directory_structure first.")
+
+        # Copy the original monolithic config for reference and for workers that need it
+        import shutil
+        shutil.copy(self.config_path, self.configs_dir / "monolithic.yaml")
 
         # configs/config_meta.yaml - Snapshotting the meta config
         self._save_yaml(self.meta_config, self.configs_dir / "config_meta.yaml")

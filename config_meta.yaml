@@ -1,13 +1,16 @@
 execution:
-  mpirun_command: mpirun -np 4
+  mpirun_command: "mpirun -np 4"
+
 lammps:
-  command: lmp
+  command: "lmp_mpi"
+
 dft:
-  command: pw.x
-  pseudo_dir: ~/qe_calc/pp_precision
-  sssp_json_path: ~/qe_calc/pp_precision/SSSP_1.3.0_PBE_precision.json
+  command: "pw.x"
+  pseudo_dir: "/qe_calc/pseudos"
+  sssp_json_path: "/qe_calc/pp_precision/SSSP_1.3.0_PBE_precision.json"
+
 docker:
-  pace_image: pace_worker:latest
-  lammps_image: lammps_worker:latest
-  dft_image: dft_worker:latest
-  gen_image: gen_worker:latest
+  pace_image: "pace_worker:latest"
+  lammps_image: "lammps_worker:latest"
+  dft_image: "dft_worker:latest"
+  gen_image: "gen_worker:latest"

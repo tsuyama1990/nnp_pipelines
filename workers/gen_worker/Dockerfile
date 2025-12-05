@@ -2,7 +2,7 @@ FROM pytorch/pytorch:2.1.2-cuda11.8-cudnn8-runtime
 
 # Install dependencies
 # PyXtal requires scipy, spglib, pymatgen (which requires numpy, pandas, etc.)
-RUN pip install --no-cache-dir mace-torch ase numpy pyyaml pyxtal
+RUN pip install --no-cache-dir mace-torch ase "numpy<2.0" pyyaml pyxtal numba pydantic
 
 # Setup Shared Directory
 COPY shared /app/shared

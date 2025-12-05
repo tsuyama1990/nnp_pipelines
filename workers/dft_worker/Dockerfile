@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python libraries
-RUN pip3 install --no-cache-dir ase numpy pyyaml
+RUN pip3 install --no-cache-dir ase numpy pyyaml numba pymatgen pydantic scipy matplotlib aseqe
 
 # Setup Shared Directory
 COPY shared /app/shared

@@ -38,15 +38,14 @@ RUN cmake ../cmake \
     && cmake --install .
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir ase numpy pyyaml scipy matplotlib pandas
+RUN pip3 install --no-cache-dir ase numpy pyyaml scipy matplotlib pandas pydantic pymatgen numba wandb
 
 # Install pyace from GitHub (ICAMS/python-ace)
 # This provides PyACECalculator and other ACE utilities
 RUN pip3 install --no-cache-dir git+https://github.com/ICAMS/python-ace.git
 
 # Verify installations
-RUN python3 -c "import lammps; print('LAMMPS imported successfully')" && \
-    python3 -c "from pyace import PyACECalculator; print('PyACECalculator imported successfully')" && \
+RUN python3 -c "import lammps; from pyace import PyACECalculator; import ase; import numpy; import yaml; import pydantic; import pymatgen; import scipy; import matplotlib; import pandas; import numba; print('Core dependencies imported successfully')" && \
     lmp -help || echo "LAMMPS binary check"
 
 # Setup Shared Directory

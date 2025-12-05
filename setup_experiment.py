@@ -134,86 +134,140 @@ def parse_args():
 def generate_run_script(setup: ExperimentSetup, use_local_mode: bool):
     """Generates the run_pipeline.sh script based on the execution mode."""
     run_script_path = setup.exp_dir / "run_pipeline.sh"
-
-    # Sanitize name just in case
     safe_name = sanitize_exp_name(setup.exp_name)
 
-    if use_local_mode:
-        logger.info("Generating local execution script (Docker disabled/not found).")
+    # Get image names from meta_config, with fallbacks
+    docker_conf = setup.meta_config.get("docker", {})
+    gen_image = docker_conf.get("gen_image", "gen_worker:latest")
+    dft_image = docker_conf.get("dft_image", "dft_worker:latest")
+    pace_image = docker_conf.get("pace_image", "pace_worker:latest")
+    al_image = docker_conf.get("lammps_image", "al_md_kmc_worker:latest")
 
-        content = f"""#!/bin/bash
-# Generated Pipeline Script (Local Mode)
+    # Define the monolithic config path to be used by all steps
+    monolithic_config = "configs/monolithic.yaml"
+    meta_config = "configs/config_meta.yaml"
+
+    content = f"""#!/bin/bash
+# Generated Full Pipeline Script (Docker Mode)
 set -e
 
-echo "Starting Pipeline for experiment: {safe_name} (Local Mode)"
+# --- Configuration ---
+EXP_NAME="{safe_name}"
+GEN_IMAGE="{gen_image}"
+DFT_IMAGE="{dft_image}"
+PACE_IMAGE="{pace_image}"
+AL_IMAGE="{al_image}"
+MONOLITHIC_CONFIG="{monolithic_config}"
+META_CONFIG="{meta_config}"
 
-# Get the directory of this script (experiment root)
+# --- Helper Functions ---
+step_header() {{
+    echo "========================================================================"
+    echo "  STEP: $1"
+    echo "========================================================================"
+}}
+
+# --- Environment Setup ---
 EXP_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
-SCRIPT_DIR="$EXP_DIR"
-
-# Locate Repo Root
-# We assume setup_experiment.py is in Repo Root.
+# The script is in the experiment dir, so REPO_ROOT is one level up
 REPO_ROOT="$(dirname "$EXP_DIR")"
-# Adjust if experiment dir is deeper (e.g. experiments/name)
-if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
-    REPO_ROOT="$(dirname "$REPO_ROOT")"
-fi
+LOG_DIR="$EXP_DIR/logs"
 
-if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
-    echo "ERROR: Could not locate repository root (containing setup_experiment.py)."
+echo "Starting Full Pipeline for experiment: $EXP_NAME"
+echo "Experiment Directory: $EXP_DIR"
+echo "Repository Root: $REPO_ROOT"
+echo "---"
+
+# Create working and log directories
+mkdir -p "$EXP_DIR/work/01_generation"
+mkdir -p "$EXP_DIR/work/04_dft"
+mkdir -p "$EXP_DIR/work/05_training"
+mkdir -p "$LOG_DIR"
+
+# --- STEP 1: Initial Structure Generation ---
+step_header "1. Initial Structure Generation"
+echo "Using Docker Image: $GEN_IMAGE"
+echo "Log file: $LOG_DIR/01_generation.log"
+docker run --rm -i --gpus all \\
+    -v "$EXP_DIR:/app/work" \\
+    -w /app/work \\
+    "$GEN_IMAGE" \\
+    python /app/src/main.py generate \\
+    --config "$MONOLITHIC_CONFIG" \\
+    --output "work/01_generation/generated_structures.xyz" > "$LOG_DIR/01_generation.log" 2>&1
+
+echo "Generated initial structures."
+echo "---"
+
+# Check if structures were generated
+if [ ! -s "$EXP_DIR/work/01_generation/generated_structures.xyz" ]; then
+    echo "ERROR: Step 1 failed to generate any structures. See log for details: $LOG_DIR/01_generation.log"
     exit 1
 fi
 
-echo "Repository Root: $REPO_ROOT"
+# --- STEP 2: DFT Labeling of Seed Structures ---
+step_header "2. DFT Labeling for Seed Potential"
+echo "Using Docker Image: $DFT_IMAGE"
+echo "Log file: $LOG_DIR/02_dft_labeling.log"
+# Mount qe_calc directory for pseudopotentials and SSSP files
+QE_CALC_DIR="$HOME/qe_calc"
+docker run --rm -i \\
+    --user $(id -u):$(id -g) \\
+    -v "$EXP_DIR:/app/work" \\
+    -v "$QE_CALC_DIR:/qe_calc" \\
+    -w /app/work \\
+    "$DFT_IMAGE" \\
+    python3 /app/src/main.py \\
+    --config "$MONOLITHIC_CONFIG" \\
+    --meta-config "$META_CONFIG" \\
+    --structure "work/01_generation/generated_structures.xyz" \\
+    --output "work/04_dft/labeled_seed_structures.xyz" > "$LOG_DIR/02_dft_labeling.log" 2>&1
 
-export PYTHONPATH="$REPO_ROOT:$PYTHONPATH"
+echo "DFT labeling complete."
+echo "---"
 
-# Relative paths for config inside the experiment dir
-CONFIG_REL="configs/07_active_learning.yaml"
-META_REL="configs/config_meta.yaml"
+# --- STEP 3: Train Seed Potential ---
+step_header "3. Training Seed Potential"
+echo "Using Docker Image: $PACE_IMAGE"
+echo "Log file: $LOG_DIR/03_seed_training.log"
+docker run --rm -i --gpus all \\
+    --user $(id -u):$(id -g) \\
+    -v "$EXP_DIR:/app/work" \\
+    -w /app/work \\
+    "$PACE_IMAGE" \\
+    python /app/src/main.py train \\
+    --config "$MONOLITHIC_CONFIG" \\
+    --meta-config "$META_CONFIG" \\
+    --dataset "work/04_dft/labeled_seed_structures.xyz" > "$LOG_DIR/03_seed_training.log" 2>&1
 
-echo "Running Active Learning Loop..."
-# Pass absolute paths to the worker, running from Experiment Directory as CWD
-cd "$EXP_DIR"
+# The trainer should create 'fept_potential.yace' in the workdir.
+# Let's find it and copy it to the root of the experiment dir for the next step.
+SEED_POTENTIAL_NAME="fept_potential.yace" # As defined in config_fept.yaml
+GENERATED_POTENTIAL=$(find "$EXP_DIR/work" -name "*.yace" | head -n 1)
 
-uv run python "$REPO_ROOT/workers/al_md_kmc_worker/src/main.py" start_loop \\
-    --config "$EXP_DIR/$CONFIG_REL" \\
-    --meta-config "$EXP_DIR/$META_REL"
-
-echo "Pipeline finished successfully."
-"""
-    else:
-        logger.info("Generating Docker execution script.")
-        image = "al_md_kmc_worker:latest" # Default, or fetch from meta if parsed
-
-        content = f"""#!/bin/bash
-# Generated Pipeline Script (Docker Mode)
-set -e
-
-echo "Starting Pipeline for experiment: {safe_name} (Docker Mode)"
-
-EXP_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
-REPO_ROOT="$(dirname "$EXP_DIR")"
-if [ ! -f "$REPO_ROOT/setup_experiment.py" ]; then
-    REPO_ROOT="$(dirname "$REPO_ROOT")"
+if [ -n "$GENERATED_POTENTIAL" ]; then
+    echo "Found potential at $GENERATED_POTENTIAL. Copying to $EXP_DIR/$SEED_POTENTIAL_NAME"
+    cp "$GENERATED_POTENTIAL" "$EXP_DIR/$SEED_POTENTIAL_NAME"
+else
+    echo "ERROR: Seed potential not found after training step. See log for details: $LOG_DIR/03_seed_training.log"
+    exit 1
 fi
+echo "Seed potential created successfully."
+echo "---"
 
-echo "Repository Root: $REPO_ROOT"
-IMAGE="{image}"
-echo "Using Docker Image: $IMAGE"
-
-# We do NOT mount REPO_ROOT to /app because it would shadow the container's source code.
-# The container image al_md_kmc_worker:latest already contains the source at /app/src.
-
+# --- STEP 4: Start Active Learning Loop ---
+step_header "4. Active Learning Loop"
+echo "Using Docker Image: $AL_IMAGE"
+echo "Log file: $LOG_DIR/04_active_learning.log"
 docker run --rm -it \\
     --gpus all \\
     --user $(id -u):$(id -g) \\
     -v "$EXP_DIR:/app/work" \\
     -w /app/work \\
-    $IMAGE \\
+    "$AL_IMAGE" \\
     python /app/src/main.py start_loop \\
-    --config configs/07_active_learning.yaml \\
-    --meta-config configs/config_meta.yaml
+    --config "$MONOLITHIC_CONFIG" \\
+    --meta-config "$META_CONFIG" > "$LOG_DIR/04_active_learning.log" 2>&1
 
 echo "Pipeline finished successfully."
 """

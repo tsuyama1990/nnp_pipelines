@@ -188,7 +188,7 @@ md_params:
 # -----------------------------------------------------------------------------
 exploration:
   # Strategy to use: "lammps_md", "ase_md", "kmc", "hybrid" (MD + KMC)
-  strategy: "hybrid"
+  strategy: "ase_md"
 
 # -----------------------------------------------------------------------------
 # Active Learning (AL) Parameters

@@ -108,8 +108,16 @@ def main():
              input_data['system']['ecutwfc'] = info.get('cutoff_wfc', 40)
              input_data['system']['ecutrho'] = info.get('cutoff_rho', input_data['system']['ecutwfc']*8)
 
-             return Espresso(
+             # Use new ASE API with EspressoProfile
+             from ase.calculators.espresso import EspressoProfile
+             
+             profile = EspressoProfile(
                  command=meta.dft_command,
+                 pseudo_dir=str(meta.pseudo_dir)
+             )
+             
+             return Espresso(
+                 profile=profile,
                  input_data=input_data,
                  pseudopotentials=pseudos,
                  kpts=(1, 1, 1) # Gamma point

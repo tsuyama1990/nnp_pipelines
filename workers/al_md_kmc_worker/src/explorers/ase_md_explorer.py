@@ -32,7 +32,11 @@ class AseMDExplorer(BaseExplorer):
         logger.info("Running ASE MD Explorer...")
 
         try:
-            atoms = read(current_structure)
+            # Try to read with explicit format specification for LAMMPS data files
+            if current_structure.endswith('.data'):
+                atoms = read(current_structure, format='lammps-data', style='atomic')
+            else:
+                atoms = read(current_structure)
         except Exception as e:
             logger.error(f"Failed to read structure {current_structure}: {e}")
             return ExplorationResult(status=ExplorationStatus.FAILED)

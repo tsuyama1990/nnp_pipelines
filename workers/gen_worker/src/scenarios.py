@@ -1,5 +1,6 @@
 """Module for scenario-driven structure generation."""
 
+import sys
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 import logging
@@ -222,14 +223,84 @@ class RandomSymmetryScenario(BaseScenario):
             try:
                 struc = pyxtal()
                 # from_random arguments: dim, group, species, numIons, factor
-                struc.from_random(3, sg, species, num_ions, factor=volume_factor)
+                # Increased volume factor to improve generation success rate
+                struc.from_random(3, sg, species, num_ions, factor=1.4)
 
                 if struc.valid:
                     atoms = struc.to_ase(resort=False)
                     generated_structures.append(atoms)
+                else:
+                    print(f"DEBUG: Pyxtal generated an invalid structure for sg={sg}, species={species}, num_ions={num_ions}", file=sys.stderr)
 
             except Exception as e:
                 # PyXtal generation failed for this attempt
+                print(f"DEBUG: Pyxtal generation failed for sg={sg}, species={species}, num_ions={num_ions}: {e}", file=sys.stderr)
+                continue
+
+        if len(generated_structures) < num_structures:
+            logging.warning(f"Only generated {len(generated_structures)}/{num_structures} structures after {attempts} attempts.")
+
+        return generated_structures
+
+        elements = self.config.get("elements", [])
+        num_structures = self.config.get("num_structures", 5)
+        space_group_range = self.config.get("space_group_range", [1, 230])
+        volume_factor = self.config.get("volume_factor", 1.0)
+        max_attempts = self.config.get("max_attempts", 50)
+
+        # Determine number of atoms per species
+        composition = self.config.get("composition")
+
+        # Parse composition once if possible
+        species_fixed = []
+        num_ions_fixed = []
+        if composition:
+            species_fixed = list(composition.keys())
+            num_ions_fixed = list(composition.values())
+
+        if not composition and not elements:
+             logging.error("No elements provided for RandomSymmetryScenario.")
+             return []
+
+        # Parse space group range once
+        if len(space_group_range) != 2:
+             sg_start, sg_end = 1, 230
+        else:
+             sg_start, sg_end = space_group_range[0], space_group_range[1]
+
+        generated_structures: List[Atoms] = []
+        attempts = 0
+
+        while len(generated_structures) < num_structures and attempts < max_attempts * num_structures:
+            attempts += 1
+
+            # Select random space group
+            sg = np.random.randint(sg_start, sg_end + 1)
+
+            # Select composition if not fixed
+            if composition:
+                species = species_fixed
+                num_ions = num_ions_fixed
+            else:
+                species = elements
+                # Random number of ions between 1 and 4 per species
+                num_ions = [np.random.randint(1, 5) for _ in elements]
+
+            try:
+                struc = pyxtal()
+                # from_random arguments: dim, group, species, numIons, factor
+                # Increased volume factor to improve generation success rate
+                struc.from_random(3, sg, species, num_ions, factor=1.4)
+
+                if struc.valid:
+                    atoms = struc.to_ase(resort=False)
+                    generated_structures.append(atoms)
+                else:
+                    print(f"DEBUG: Pyxtal generated an invalid structure for sg={sg}, species={species}, num_ions={num_ions}", file=sys.stderr)
+
+            except Exception as e:
+                # PyXtal generation failed for this attempt
+                print(f"DEBUG: PyXtal generation failed for sg={sg}, species={species}, num_ions={num_ions}: {e}", file=sys.stderr)
                 continue
 
         if len(generated_structures) < num_structures:
